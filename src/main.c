@@ -16,11 +16,38 @@
 
 #include "log.h"
 
+#define MAX_USERS 100
+
 typedef struct user {
     char *nick;
     char *username;
     char *full_name;
 } user;
+
+user *USERS[MAX_USERS];
+
+// add user to users list. return pointer to new user, or NULL if no more room
+// TODO: check if user with nick already exists
+user *add_user(char *nick) {
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (USERS[i] == NULL) {
+            user *new_user = malloc(sizeof(user));
+            strcpy(new_user->nick, nick);
+            USERS[i] = new_user;
+            return new_user;
+        }
+    }
+    return NULL;
+}
+
+user *find_user(char *nick) {
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (strcmp(USERS[i]->nick, nick) == 0) {
+            return USERS[i];
+        }
+    }
+    return NULL;
+}
 
 struct sockaddr_in init_socket(int port) {
     struct sockaddr_in addr;
@@ -31,12 +58,22 @@ struct sockaddr_in init_socket(int port) {
     return addr;
 }
 
-void handle_nick_msg(char *msg) {
-    printf("Received nick command!\n");
+void handle_nick_msg(char *nick) {
+    printf("Received nick command with arg: %s\n", nick);
+    add_user(nick);
 }
 
 void handle_user_msg(char *msg) {
     printf("Received user command!\n");
+    // TODO: save as username?
+    user *new_user = find_user(msg);
+    if (new_user == NULL) {
+        return;
+    }
+    msg = strtok(NULL, " "); // ignore second, third params
+    msg = strtok(NULL, " ");
+    msg = strtok(NULL, " :");
+    strcpy(new_user->full_name, msg);
 }
 
 void accept_user(int port) {
@@ -125,8 +162,7 @@ int main(int argc, char *argv[]) {
         break;
     }
 
-	/* Your code goes here */
+    /* Your code goes here */
     accept_user(atoi(port));
-	return 0;
+    return 0;
 }
-
