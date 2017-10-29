@@ -52,9 +52,9 @@ user *find_user(char *nick) {
 struct sockaddr_in init_socket(int port) {
     struct sockaddr_in addr;
     bzero((char *) &addr, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port);
+    addr.sin_family = AF_INET;         // ipv4
+    addr.sin_addr.s_addr = INADDR_ANY; // listen on all
+    addr.sin_port = htons(port);       // port
     return addr;
 }
 
@@ -63,17 +63,18 @@ void handle_nick_msg(char *nick) {
     add_user(nick);
 }
 
-void handle_user_msg(char *msg) {
+char *handle_user_msg(char *msg) {
     printf("Received user command!\n");
     // TODO: save as username?
     user *new_user = find_user(msg);
     if (new_user == NULL) {
-        return;
+        return "Nickname already in use";
     }
     msg = strtok(NULL, " "); // ignore second, third params
     msg = strtok(NULL, " ");
     msg = strtok(NULL, " :");
     strcpy(new_user->full_name, msg);
+    return "Welcome to the Internet Relay Network felix!felix@felix.com";
 }
 
 void accept_user(int port) {
@@ -96,7 +97,12 @@ void accept_user(int port) {
         if (strcmp(command, "NICK") == 0) {
             handle_nick_msg(strtok(NULL, " "));
         } else if (strcmp(command, "USER") == 0) {
-            handle_user_msg(strtok(NULL, " "));
+            char* reply = handle_user_msg(strtok(NULL, " "));
+            if (reply != NULL) {
+                if (send(replysockfd, reply, sizeof(reply), 0) == -1) {
+                    perror("could not send a reply!");
+                }
+            }
         } else if (strcmp(command, "EXIT") == 0) { // for debugging only
             break;
         } else {

@@ -1,2 +1,11 @@
 *.o
-chirc
+*.d
+*~
+*.orig
+*.pyc
+/chirc
+.cache
+results
+report.html
+report.json
+alltests
