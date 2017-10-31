@@ -26,6 +26,67 @@ typedef struct user {
     char *full_name;
 } user;
 
+typedef struct message {
+    char *prefix;
+    char *cmd;
+    char *args[15];
+} message;
+
+void log_message(const message *msg) {
+    if (msg->prefix != NULL) {
+        chilog(INFO, "prefix: %s", msg->prefix);
+    }
+    if (msg->cmd != NULL) {
+       chilog(INFO, "cmd: %s", msg->cmd); 
+    }
+    chilog(INFO, "args:");
+    int i = 0;
+    while (msg->args[i] != NULL) {
+        chilog(INFO, "\t%s", msg->args[i]);
+        i++;
+    }
+}
+
+void parse_message(char *buffer, message *msg) {
+    if (strlen(buffer) > 512) {
+        buffer[512] = '\0';
+    }
+
+    char *token = strtok(buffer, " ");
+    // prefix
+    if (token != NULL && strlen(token) > 0 && token[0] == ':') {
+        msg->prefix = malloc(strlen(token));
+        strcpy(msg->prefix, token + 1);
+        token = strtok(NULL, " ");        
+    }
+
+    // command
+    if (token != NULL) {
+        msg->cmd = malloc(strlen(token) + 1);
+        strcpy(msg->cmd, token);
+        token = strtok(NULL, " ");
+    }
+
+    // args
+    for (int i = 0; i < 15; i++) {
+        msg->args[i] = NULL;
+        if (token == NULL) {
+            continue;
+        }
+        if (strlen(token) > 0 && token[0] == ':') {
+            char *rest = strtok(NULL, "");
+            msg->args[i] = malloc(strlen(token) + strlen(rest));
+            strcpy(msg->args[i], token + 1);
+            strcat(msg->args[i], " ");
+            strcat(msg->args[i], rest);
+        } else {
+            msg->args[i] = malloc(strlen(token));
+            strcpy(msg->args[i], token);
+        }
+        token = strtok(NULL, " ");        
+    }
+}
+
 user *USERS[MAX_USERS] = {NULL};
 
 // Create or retrieve existing entry for user with given hostname, and update
@@ -109,10 +170,13 @@ void accept_user(int port) {
         chilog(INFO, "Received connection from client: %s", client_hostname);
         read(replysockfd, buffer, 255);
         chilog(INFO, "Received message: %s", buffer);
-        char *command = strtok(buffer, " ");
-        if (strcmp(command, "NICK") == 0) {
-            char *nick = strtok(NULL, " ");
-            add_user(client_hostname, nick);
+        message *msg = malloc(sizeof(message));
+        parse_message(buffer, msg);
+        log_message(msg);
+        // char *command = strtok(buffer, " ");
+        // if (strcmp(command, "NICK") == 0) {
+        //     char *nick = strtok(NULL, " ");
+        //     add_user(client_hostname, nick);
         // } else if (strcmp(command, "USER") == 0) {
         //     char* reply = handle_user_msg(strtok(NULL, " "));
         //     if (reply != NULL) {
@@ -122,9 +186,9 @@ void accept_user(int port) {
         //     }
         // } else if (strcmp(command, "EXIT") == 0) { // for debugging only
         //     break;
-        } else {
-            chilog(WARNING, "Received unknown command %s", command);
-        }
+        // } else {
+        //     chilog(WARNING, "Received unknown command %s", command);
+        // }
         close(replysockfd);
     }
     close(sockfd);
