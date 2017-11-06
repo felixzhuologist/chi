@@ -70,7 +70,7 @@ void parse_message(char *buffer, message *msg) {
     // args
     for (int i = 0; i < 15; i++) {
         msg->args[i] = NULL;
-        if (token == NULL) {
+        if (token == NULL) { // keep setting the rest of the entries to null
             continue;
         }
         if (strlen(token) > 0 && token[0] == ':') {
@@ -87,11 +87,35 @@ void parse_message(char *buffer, message *msg) {
     }
 }
 
+void write_reply(const char *prefix, const char *cmd, const char **args, char *buffer) {
+    int i = 0;
+
+    // prefix
+    buffer[i++] = ':';
+    strcpy(buffer + (i++), prefix);
+
+    // cmd
+    buffer[i++] = ' ';
+    strcpy(buffer + (i++), cmd);
+
+    // args
+    for (int j = 0; j < 15; j++) {
+        if (args[j] == NULL) {
+            break;
+        }
+        buffer[i++] = ' ';
+        strcpy(buffer + (i++), args[j]);
+    }
+
+    buffer[i++] = '\r';
+    buffer[i++] = '\n';
+}
+
 user *USERS[MAX_USERS] = {NULL};
 
 // Create or retrieve existing entry for user with given hostname, and update
 // the user's nick. Return pointer to that user or NULL if 
-user *add_user(char *hostname, char *nick) {
+user *add_user(const char *hostname, const char *nick) {
     for (int i = 0; i < MAX_USERS; i++) {
         if (USERS[i] == NULL) {
             user *new_user = malloc(sizeof(user));
@@ -133,15 +157,10 @@ struct sockaddr_in init_socket(int port) {
 }
 
 char *handle_user_msg(char *msg) {
-    printf("Received user command!\n");
-    // TODO: save as username?
     user *new_user = find_user(msg);
     if (new_user == NULL) {
         return "Nickname already in use";
     }
-    msg = strtok(NULL, " "); // ignore second, third params
-    msg = strtok(NULL, " ");
-    msg = strtok(NULL, " :");
     strcpy(new_user->full_name, msg);
     return "Welcome to the Internet Relay Network felix!felix@felix.com";
 }
@@ -169,26 +188,23 @@ void accept_user(int port) {
 
         chilog(INFO, "Received connection from client: %s", client_hostname);
         read(replysockfd, buffer, 255);
-        chilog(INFO, "Received message: %s", buffer);
         message *msg = malloc(sizeof(message));
         parse_message(buffer, msg);
         log_message(msg);
-        // char *command = strtok(buffer, " ");
-        // if (strcmp(command, "NICK") == 0) {
-        //     char *nick = strtok(NULL, " ");
-        //     add_user(client_hostname, nick);
-        // } else if (strcmp(command, "USER") == 0) {
+        if (strcmp(msg->cmd, "NICK") == 0) {
+            add_user(client_hostname, msg->args[0]);
+        // } else if (strcmp(msg->cmd, "USER") == 0) {
         //     char* reply = handle_user_msg(strtok(NULL, " "));
         //     if (reply != NULL) {
         //         if (send(replysockfd, reply, sizeof(reply), 0) == -1) {
         //             perror("could not send a reply!");
         //         }
         //     }
-        // } else if (strcmp(command, "EXIT") == 0) { // for debugging only
-        //     break;
-        // } else {
-        //     chilog(WARNING, "Received unknown command %s", command);
-        // }
+        } else if (strcmp(msg->cmd, "EXIT") == 0) { // for debugging only
+            break;
+        } else {
+            chilog(WARNING, "Received unknown command %s", msg->cmd);
+        }
         close(replysockfd);
     }
     close(sockfd);
