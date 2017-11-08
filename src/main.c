@@ -149,7 +149,9 @@ user *add_user(const char *hostname, const char *nick) {
 
 user *find_user(const char *hostname) {
     for (int i = 0; i < MAX_USERS; i++) {
-        if (strcmp(USERS[i]->hostname, hostname) == 0) {
+        if (USERS[i] == NULL) {
+            return NULL;
+        } else if (strcmp(USERS[i]->hostname, hostname) == 0) {
             return USERS[i];
         }
     }
