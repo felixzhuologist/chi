@@ -19,6 +19,8 @@
 
 #define MAX_USERS 100
 
+char *RPL_WELCOME = "001";
+
 typedef struct user {
     char *hostname;
     char *nick;
@@ -87,24 +89,30 @@ void parse_message(char *buffer, message *msg) {
     }
 }
 
-void write_reply(const char *prefix, const char *cmd, const char **args, char *buffer) {
+// expects prefix and last argument to already be prefixed with :
+void write_reply(const char *prefix, const char *cmd, const char **args, 
+                 const int num_args, char *buffer) {
     int i = 0;
 
     // prefix
-    buffer[i++] = ':';
-    strcpy(buffer + (i++), prefix);
+    if (prefix != NULL && strlen(prefix) > 0) {
+        strcpy(buffer + i, prefix);
+        i += strlen(prefix);
+        buffer[i++] = ' ';
+    }
 
     // cmd
-    buffer[i++] = ' ';
-    strcpy(buffer + (i++), cmd);
+    strcpy(buffer + i, cmd);
+    i += strlen(cmd);
 
     // args
-    for (int j = 0; j < 15; j++) {
-        if (args[j] == NULL) {
+    for (int j = 0; j < (num_args < 15 ? num_args : 15); j++) {
+        if (args[j] == NULL && strlen(args[j]) > 0) {
             break;
         }
         buffer[i++] = ' ';
-        strcpy(buffer + (i++), args[j]);
+        strcpy(buffer + i, args[j]);
+        i += strlen(args[j]);
     }
 
     buffer[i++] = '\r';
@@ -114,7 +122,7 @@ void write_reply(const char *prefix, const char *cmd, const char **args, char *b
 user *USERS[MAX_USERS] = {NULL};
 
 // Create or retrieve existing entry for user with given hostname, and update
-// the user's nick. Return pointer to that user or NULL if 
+// the user's nick. Return pointer to that user or NULL if no more room
 user *add_user(const char *hostname, const char *nick) {
     for (int i = 0; i < MAX_USERS; i++) {
         if (USERS[i] == NULL) {
@@ -127,6 +135,7 @@ user *add_user(const char *hostname, const char *nick) {
             chilog(DEBUG, "Adding new user with nick: %s", new_user->nick);
             return new_user;
         } else if (strcmp(USERS[i]->hostname, hostname) == 0) {
+            chilog(DEBUG, "found existing hostname");
             char *old_nick = USERS[i]->nick;
             char *new_nick = malloc(strlen(nick) + 1);
             strcpy(new_nick, nick);
@@ -138,7 +147,7 @@ user *add_user(const char *hostname, const char *nick) {
     return NULL;
 }
 
-user *find_user(char *hostname) {
+user *find_user(const char *hostname) {
     for (int i = 0; i < MAX_USERS; i++) {
         if (strcmp(USERS[i]->hostname, hostname) == 0) {
             return USERS[i];
@@ -156,13 +165,28 @@ struct sockaddr_in init_socket(int port) {
     return addr;
 }
 
-char *handle_user_msg(char *msg) {
-    user *new_user = find_user(msg);
+void handle_user_msg(const char *hostname, const message *msg, char *reply) {
+    // set user, full name for user
+    user *new_user = find_user(hostname);
     if (new_user == NULL) {
-        return "Nickname already in use";
+        chilog(WARNING, "Received USER message from unknown hostname");
+        return;
     }
-    strcpy(new_user->full_name, msg);
-    return "Welcome to the Internet Relay Network felix!felix@felix.com";
+    chilog(INFO, "Updating user with nick %s", new_user->nick);
+    char *username = msg->args[0]; // don't handle args 1 and 2 for now
+    char *full_name = msg->args[3];
+    new_user->username = malloc(strlen(username) + 1);
+    new_user->full_name = malloc(strlen(full_name) + 1);
+    strcpy(new_user->username, username);
+    strcpy(new_user->full_name, full_name);
+    chilog(DEBUG, "Successfully added username and name to user");
+
+    // construct reply
+    char reply_msg[100]; // TODO - get len?
+    sprintf(reply_msg, ":Welcome to the Internet Relay Network %s!%s@%s",
+        username, username, hostname);
+    char *reply_args[2] = {new_user->nick, reply_msg};
+    write_reply(":localhost", RPL_WELCOME, reply_args, 2, reply);
 }
 
 void accept_user(int port) {
@@ -177,8 +201,10 @@ void accept_user(int port) {
         struct sockaddr_in cli_addr;
         socklen_t client_addr_len = sizeof(cli_addr);
 
-        char buffer[256];
+        char in_buffer[512], reply_buffer[512];
         char client_hostname[100];
+        memset(reply_buffer, '\0', sizeof(reply_buffer));
+
         replysockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_len);
 
         if (getnameinfo((struct sockaddr *) &cli_addr, client_addr_len, 
@@ -187,23 +213,27 @@ void accept_user(int port) {
         }
 
         chilog(INFO, "Received connection from client: %s", client_hostname);
-        read(replysockfd, buffer, 255);
+        read(replysockfd, in_buffer, 255);
         message *msg = malloc(sizeof(message));
-        parse_message(buffer, msg);
+        msg->prefix = NULL;
+        msg->cmd = NULL;
+        parse_message(in_buffer, msg);
         log_message(msg);
         if (strcmp(msg->cmd, "NICK") == 0) {
             add_user(client_hostname, msg->args[0]);
-        // } else if (strcmp(msg->cmd, "USER") == 0) {
-        //     char* reply = handle_user_msg(strtok(NULL, " "));
-        //     if (reply != NULL) {
-        //         if (send(replysockfd, reply, sizeof(reply), 0) == -1) {
-        //             perror("could not send a reply!");
-        //         }
-        //     }
+        } else if (strcmp(msg->cmd, "USER") == 0) {
+            handle_user_msg(client_hostname, msg, reply_buffer);
         } else if (strcmp(msg->cmd, "EXIT") == 0) { // for debugging only
             break;
         } else {
             chilog(WARNING, "Received unknown command %s", msg->cmd);
+        }
+
+        if (strlen(reply_buffer) > 0) {
+            chilog(INFO, "reply: %s", reply_buffer);
+            if (send(replysockfd, reply_buffer, 512, 0) == -1) {
+                perror("could not send a reply!");
+            }
         }
         close(replysockfd);
     }
