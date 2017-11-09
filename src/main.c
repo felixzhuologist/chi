@@ -49,6 +49,12 @@ void log_message(const message *msg) {
     }
 }
 
+void strip_carriage_return(char *s) {
+    if (s[strlen(s) - 2] == '\r') {
+        s[strlen(s) - 2] = '\0'; 
+    }
+}
+
 void parse_message(char *buffer, message *msg) {
     if (strlen(buffer) > 512) {
         buffer[512] = '\0';
@@ -59,7 +65,7 @@ void parse_message(char *buffer, message *msg) {
     if (token != NULL && strlen(token) > 0 && token[0] == ':') {
         msg->prefix = malloc(strlen(token));
         strcpy(msg->prefix, token + 1);
-        token = strtok(NULL, " ");        
+        token = strtok(NULL, " ");
     }
 
     // command
@@ -217,6 +223,7 @@ void accept_user(int port) {
 
         chilog(INFO, "Received connection from client: %s", client_hostname);
         while (read(replysockfd, in_buffer, 255) > 0) {
+            strip_carriage_return(in_buffer);
             chilog(DEBUG, "Raw message: %s", in_buffer);
             message *msg = malloc(sizeof(message));
             msg->prefix = NULL;
