@@ -206,6 +206,7 @@ void accept_user(int port) {
         char in_buffer[512], reply_buffer[512];
         char client_hostname[100];
         memset(reply_buffer, '\0', sizeof(reply_buffer));
+        memset(in_buffer, '\0', sizeof(in_buffer));
 
         replysockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_len);
 
@@ -215,26 +216,26 @@ void accept_user(int port) {
         }
 
         chilog(INFO, "Received connection from client: %s", client_hostname);
-        read(replysockfd, in_buffer, 255);
-        message *msg = malloc(sizeof(message));
-        msg->prefix = NULL;
-        msg->cmd = NULL;
-        parse_message(in_buffer, msg);
-        log_message(msg);
-        if (strcmp(msg->cmd, "NICK") == 0) {
-            add_user(client_hostname, msg->args[0]);
-        } else if (strcmp(msg->cmd, "USER") == 0) {
-            handle_user_msg(client_hostname, msg, reply_buffer);
-        } else if (strcmp(msg->cmd, "EXIT") == 0) { // for debugging only
-            break;
-        } else {
-            chilog(WARNING, "Received unknown command %s", msg->cmd);
-        }
+        while (read(replysockfd, in_buffer, 255) > 0) {
+            chilog(DEBUG, "Raw message: %s", in_buffer);
+            message *msg = malloc(sizeof(message));
+            msg->prefix = NULL;
+            msg->cmd = NULL;
+            parse_message(in_buffer, msg);
+            log_message(msg);
+            if (strcmp(msg->cmd, "NICK") == 0) {
+                add_user(client_hostname, msg->args[0]);
+            } else if (strcmp(msg->cmd, "USER") == 0) {
+                handle_user_msg(client_hostname, msg, reply_buffer);
+            } else {
+                chilog(WARNING, "Received unknown command %s", msg->cmd);
+            }
 
-        if (strlen(reply_buffer) > 0) {
-            chilog(INFO, "reply: %s", reply_buffer);
-            if (send(replysockfd, reply_buffer, 512, 0) == -1) {
-                perror("could not send a reply!");
+            if (strlen(reply_buffer) > 0) {
+                chilog(INFO, "reply: %s", reply_buffer);
+                if (send(replysockfd, reply_buffer, 512, 0) == -1) {
+                    perror("could not send a reply!");
+                }
             }
         }
         close(replysockfd);
