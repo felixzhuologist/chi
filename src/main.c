@@ -127,7 +127,7 @@ user *USERS[MAX_USERS] = {NULL};
 // and return it. Return NULL if hostname not found and no more room for users
 user *get_user(const char *hostname) {
     for (int i = 0; i < MAX_USERS; i++) {
-        // TODO: this assumes users are assigned sequentially and that no "holes" exist
+        // TODO: this assumes users are assigned sequentially and that no "holes"
         if (USERS[i] == NULL) {
             chilog(DEBUG, "allocating new user for %s", hostname);
             user *new_user = malloc(sizeof(user));
@@ -153,7 +153,7 @@ bool is_user_complete(const user *user) {
 void create_rpl_welcome(const user *user, char *reply) {
     char reply_msg[100]; // TODO - get len?
     sprintf(reply_msg, ":Welcome to the Internet Relay Network %s!%s@%s",
-        user->username, user->username, user->hostname);
+        user->nick, user->username, user->hostname);
     char *reply_args[2] = {user->nick, reply_msg};
     write_reply(":localhost", RPL_WELCOME, reply_args, 2, reply);
 }
@@ -215,7 +215,7 @@ int find_cr(const char *str, const int size) {
  * returns either the size of message, or -1 if message does not contain a full
  * IRC message
  */
-int read_full_message(const int sockfd, char *message, char *next_message) {
+bool read_full_message(const int sockfd, char *message, char *next_message) {
     char buffer[CHUNK_SIZE];
     int num_read;
     int cr_index;
@@ -223,34 +223,27 @@ int read_full_message(const int sockfd, char *message, char *next_message) {
     int next_message_len;
     int total_num_read = 0;
 
-    int message_size = strlen(message);
-    // if there's already a full message, move the rest of the string
-    // to next message instead of reading more from the socket
-    if ((cr_index = find_cr(message, message_size)) < message_size) {
-        strcpy(message + cr_index + 2, next_message);
-        message[cr_index] = '\0';
-        return cr_index;
-    }
-    // otherwise append to message by reading from the socket until
-    // a CR was found
-    while ((num_read = recv(sockfd, buffer, CHUNK_SIZE, 0)) > 0) {
-        chilog(DEBUG, "Received chunk: %s", buffer);
-        total_num_read += num_read;
+    memset(buffer, '\0', sizeof(buffer));
 
-        cr_index = find_cr(buffer, num_read);
-        strncat(message, buffer, cr_index);
-        if (cr_index < num_read - 1) { // found a CR
-            next_message_start_index = cr_index + 2;
-            next_message_len = num_read - next_message_start_index;
-            if (next_message_len > 0) {
-                strncat(next_message, buffer + next_message_start_index, next_message_len);
-            }
-            return total_num_read;
+    // keep reading from socket and appending to message until we find a CR
+    while (!((cr_index = find_cr(message, strlen(message))) < strlen(message))) {
+        if ((num_read = recv(sockfd, buffer, CHUNK_SIZE, 0)) == 0) {
+            chilog(ERROR, "Client closed socket without sending complete message");
+            return false;
         }
-        
+        strncat(message, buffer, num_read);
+        chilog(DEBUG, "message so far: %s", message);
+        total_num_read += num_read; 
     }
-    chilog(ERROR, "Client closed socket without sending complete message");
-    return -1;
+
+    // now that there's a CR in message, move the start of the next message
+    strcpy(next_message, message + cr_index + 2);
+    message[cr_index] = '\0';
+    chilog(DEBUG, "current: %s, next: %s", message, next_message);
+    return true;
+
+    // chilog(ERROR, "Client closed socket without sending complete message");
+    // return -1;
 }
 
 void accept_user(int port) {
@@ -279,7 +272,7 @@ void accept_user(int port) {
         }
 
         chilog(INFO, "Received connection from client: %s", client_hostname);
-        while (read_full_message(replysockfd, in_buffer, next_message) > 0) {
+        while (read_full_message(replysockfd, in_buffer, next_message)) {
             message *msg = malloc(sizeof(message));
             msg->prefix = NULL;
             msg->cmd = NULL;
