@@ -18,6 +18,7 @@
 #include "log.h"
 
 #define MAX_USERS 100
+#define CHUNK_SIZE 512
 
 char *RPL_WELCOME = "001";
 
@@ -46,12 +47,6 @@ void log_message(const message *msg) {
     while (msg->args[i] != NULL) {
         chilog(INFO, "\t%s", msg->args[i]);
         i++;
-    }
-}
-
-void strip_carriage_return(char *s) {
-    if (s[strlen(s) - 2] == '\r') {
-        s[strlen(s) - 2] = '\0'; 
     }
 }
 
@@ -197,6 +192,65 @@ void handle_user_msg(const char *hostname, const message *msg, char *reply) {
     write_reply(":localhost", RPL_WELCOME, reply_args, 2, reply);
 }
 
+// return index of first carriage return or size if it's not found
+int find_cr(const char *str, const int size) {
+    int i = 0;
+    for (; i < size - 1; i++) {
+        if (str[i] == '\r' && str[i + 1] == '\n') {
+            return i;
+        }
+    }
+    return i + 1;
+}
+
+/*
+ * Read a full CR terminated IRC message
+ *
+ * This function tries to read a full IRC message with the CR removed into
+ * the message arg by first trying to parse message itself, and then (if message
+ * doesn't contain a full IRC message), by reading from the socket. 
+ * it uses next_message to store in leftover bytes that were read/parsed, and
+ * returns either the size of message, or -1 if message does not contain a full
+ * IRC message
+ */
+int read_full_message(const int sockfd, char *message, char *next_message) {
+    char buffer[CHUNK_SIZE];
+    int num_read;
+    int cr_index;
+    int next_message_start_index;
+    int next_message_len;
+    int total_num_read = 0;
+
+    int message_size = strlen(message);
+    // if there's already a full message, move the rest of the string
+    // to next message instead of reading more from the socket
+    if ((cr_index = find_cr(message, message_size)) < message_size) {
+        strcpy(message + cr_index + 2, next_message);
+        message[cr_index] = '\0';
+        return cr_index;
+    }
+    // otherwise append to message by reading from the socket until
+    // a CR was found
+    while ((num_read = recv(sockfd, buffer, CHUNK_SIZE, 0)) > 0) {
+        chilog(DEBUG, "Received chunk: %s", buffer);
+        total_num_read += num_read;
+
+        cr_index = find_cr(buffer, num_read);
+        strncat(message, buffer, cr_index);
+        if (cr_index < num_read - 1) { // found a CR
+            next_message_start_index = cr_index + 2;
+            next_message_len = num_read - next_message_start_index;
+            if (next_message_len > 0) {
+                strncat(next_message, buffer + next_message_start_index, next_message_len);
+            }
+            return total_num_read;
+        }
+        
+    }
+    chilog(ERROR, "Client closed socket without sending complete message");
+    return -1;
+}
+
 void accept_user(int port) {
     int sockfd, replysockfd;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -209,10 +263,11 @@ void accept_user(int port) {
         struct sockaddr_in cli_addr;
         socklen_t client_addr_len = sizeof(cli_addr);
 
-        char in_buffer[512], reply_buffer[512];
+        char in_buffer[512], next_message[512], reply_buffer[512];
         char client_hostname[100];
         memset(reply_buffer, '\0', sizeof(reply_buffer));
         memset(in_buffer, '\0', sizeof(in_buffer));
+        memset(next_message, '\0', sizeof(next_message));
 
         replysockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_len);
 
@@ -222,9 +277,7 @@ void accept_user(int port) {
         }
 
         chilog(INFO, "Received connection from client: %s", client_hostname);
-        while (read(replysockfd, in_buffer, 255) > 0) {
-            strip_carriage_return(in_buffer);
-            chilog(DEBUG, "Raw message: %s", in_buffer);
+        while (read_full_message(replysockfd, in_buffer, next_message) > 0) {
             message *msg = malloc(sizeof(message));
             msg->prefix = NULL;
             msg->cmd = NULL;
@@ -244,6 +297,8 @@ void accept_user(int port) {
                     perror("could not send a reply!");
                 }
             }
+            strcpy(in_buffer, next_message);
+            memset(next_message, '\0', sizeof(message));
         }
         close(replysockfd);
     }
