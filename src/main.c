@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -122,41 +123,51 @@ void write_reply(const char *prefix, const char *cmd, const char **args,
 
 user *USERS[MAX_USERS] = {NULL};
 
-// Create or retrieve existing entry for user with given hostname, and update
-// the user's nick. Return pointer to that user or NULL if no more room
-user *add_user(const char *hostname, const char *nick) {
+// search through USERS and either return matching user or create new one
+// and return it. Return NULL if hostname not found and no more room for users
+user *get_user(const char *hostname) {
     for (int i = 0; i < MAX_USERS; i++) {
+        // TODO: this assumes users are assigned sequentially and that no "holes" exist
         if (USERS[i] == NULL) {
+            chilog(DEBUG, "allocating new user for %s", hostname);
             user *new_user = malloc(sizeof(user));
-            new_user->nick = malloc(strlen(nick) + 1);
-            new_user->hostname = malloc(strlen(hostname) + 1);
-            strcpy(new_user->nick, nick);
-            strcpy(new_user->hostname, hostname);
             USERS[i] = new_user;
-            chilog(DEBUG, "Adding new user with nick: %s", new_user->nick);
+            new_user->nick = NULL;
+            new_user->username = NULL;
+            new_user->full_name = NULL;
+            new_user->hostname = malloc(strlen(hostname) + 1);
+            strcpy(new_user->hostname, hostname);
             return new_user;
         } else if (strcmp(USERS[i]->hostname, hostname) == 0) {
-            chilog(DEBUG, "found existing hostname");
-            char *old_nick = USERS[i]->nick;
-            char *new_nick = malloc(strlen(nick) + 1);
-            strcpy(new_nick, nick);
-            chilog(DEBUG, "Updating user's nick from %s to %s", old_nick, new_nick);
-            USERS[i]->nick = new_nick;
+            chilog(DEBUG, "found existing user for %s", hostname);
             return USERS[i];
         }
     }
     return NULL;
 }
 
-user *find_user(const char *hostname) {
-    for (int i = 0; i < MAX_USERS; i++) {
-        if (USERS[i] == NULL) {
-            return NULL;
-        } else if (strcmp(USERS[i]->hostname, hostname) == 0) {
-            return USERS[i];
-        }
+bool is_user_complete(const user *user) {
+    return user->nick != NULL && user->username != NULL && user->full_name != NULL;
+}
+
+void create_rpl_welcome(const user *user, char *reply) {
+    char reply_msg[100]; // TODO - get len?
+    sprintf(reply_msg, ":Welcome to the Internet Relay Network %s!%s@%s",
+        user->username, user->username, user->hostname);
+    char *reply_args[2] = {user->nick, reply_msg};
+    write_reply(":localhost", RPL_WELCOME, reply_args, 2, reply);
+}
+
+void handle_nick_msg(const char *hostname, const message *msg, char *reply) {
+    user *new_user = get_user(hostname);
+
+    char *nick = msg->args[0];
+    new_user->nick = malloc(strlen(nick) + 1);
+    strcpy(new_user->nick, nick);
+
+    if (is_user_complete(new_user)) {
+        create_rpl_welcome(new_user, reply);
     }
-    return NULL;
 }
 
 struct sockaddr_in init_socket(int port) {
@@ -169,27 +180,18 @@ struct sockaddr_in init_socket(int port) {
 }
 
 void handle_user_msg(const char *hostname, const message *msg, char *reply) {
-    // set user, full name for user
-    user *new_user = find_user(hostname);
-    if (new_user == NULL) {
-        chilog(WARNING, "Received USER message from unknown hostname");
-        return;
-    }
-    chilog(INFO, "Updating user with nick %s", new_user->nick);
+    user *new_user = get_user(hostname);
+
     char *username = msg->args[0]; // don't handle args 1 and 2 for now
     char *full_name = msg->args[3];
     new_user->username = malloc(strlen(username) + 1);
     new_user->full_name = malloc(strlen(full_name) + 1);
     strcpy(new_user->username, username);
     strcpy(new_user->full_name, full_name);
-    chilog(DEBUG, "Successfully added username and name to user");
 
-    // construct reply
-    char reply_msg[100]; // TODO - get len?
-    sprintf(reply_msg, ":Welcome to the Internet Relay Network %s!%s@%s",
-        username, username, hostname);
-    char *reply_args[2] = {new_user->nick, reply_msg};
-    write_reply(":localhost", RPL_WELCOME, reply_args, 2, reply);
+    if (is_user_complete(new_user)) {
+        create_rpl_welcome(new_user, reply);
+    }
 }
 
 // return index of first carriage return or size if it's not found
@@ -284,7 +286,7 @@ void accept_user(int port) {
             parse_message(in_buffer, msg);
             log_message(msg);
             if (strcmp(msg->cmd, "NICK") == 0) {
-                add_user(client_hostname, msg->args[0]);
+                handle_nick_msg(client_hostname, msg, reply_buffer);
             } else if (strcmp(msg->cmd, "USER") == 0) {
                 handle_user_msg(client_hostname, msg, reply_buffer);
             } else {
