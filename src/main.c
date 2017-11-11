@@ -208,12 +208,11 @@ int find_cr(const char *str, const int size) {
 /*
  * Read a full CR terminated IRC message
  *
- * This function tries to read a full IRC message with the CR removed into
- * the message arg by first trying to parse message itself, and then (if message
- * doesn't contain a full IRC message), by reading from the socket. 
- * it uses next_message to store in leftover bytes that were read/parsed, and
- * returns either the size of message, or -1 if message does not contain a full
- * IRC message
+ * This function reads from socket into message until message contains a CR.
+ * (if message already contains a CR then no reading occurs).
+ * The CR is stripped and the contents of message after the CR (i.e. the start
+ * of the next message(s)) is copied into next_message for future use.
+ * Returns true if message contains a full IRC message, and false otherwise
  */
 bool read_full_message(const int sockfd, char *message, char *next_message) {
     char buffer[CHUNK_SIZE];
