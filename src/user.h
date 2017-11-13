@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 #define MAX_USERS 100
 
 typedef struct user {
