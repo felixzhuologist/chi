@@ -218,8 +218,6 @@ bool read_full_message(const int sockfd, char *message, char *next_message) {
     char buffer[CHUNK_SIZE];
     int num_read;
     int cr_index;
-    int next_message_start_index;
-    int next_message_len;
     int total_num_read = 0;
 
     memset(buffer, '\0', sizeof(buffer));
