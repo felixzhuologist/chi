@@ -18,47 +18,8 @@
 
 #include "log.h"
 #include "message.h"
-
-#define MAX_USERS 100
-#define CHUNK_SIZE 512
-
-char *RPL_WELCOME = "001";
-
-typedef struct user {
-    char *hostname;
-    char *nick;
-    char *username;
-    char *full_name;
-} user;
-
-user *USERS[MAX_USERS] = {NULL};
-
-// search through USERS and either return matching user or create new one
-// and return it. Return NULL if hostname not found and no more room for users
-user *get_user(const char *hostname) {
-    for (int i = 0; i < MAX_USERS; i++) {
-        // TODO: this assumes users are assigned sequentially and that no "holes"
-        if (USERS[i] == NULL) {
-            chilog(DEBUG, "allocating new user for %s", hostname);
-            user *new_user = malloc(sizeof(user));
-            USERS[i] = new_user;
-            new_user->nick = NULL;
-            new_user->username = NULL;
-            new_user->full_name = NULL;
-            new_user->hostname = malloc(strlen(hostname) + 1);
-            strcpy(new_user->hostname, hostname);
-            return new_user;
-        } else if (strcmp(USERS[i]->hostname, hostname) == 0) {
-            chilog(DEBUG, "found existing user for %s", hostname);
-            return USERS[i];
-        }
-    }
-    return NULL;
-}
-
-bool is_user_complete(const user *user) {
-    return user->nick != NULL && user->username != NULL && user->full_name != NULL;
-}
+#include "user.h"
+#include "reply.h"
 
 void create_rpl_welcome(const user *user, char *reply) {
     char reply_msg[100]; // TODO - get len?
@@ -104,56 +65,7 @@ void handle_user_msg(const char *hostname, const message *msg, char *reply) {
     }
 }
 
-// return index of first carriage return or size if it's not found
-int find_cr(const char *str, const int size) {
-    int i = 0;
-    for (; i < size - 1; i++) {
-        if (str[i] == '\r' && str[i + 1] == '\n') {
-            return i;
-        }
-    }
-    return i + 1;
-}
-
-/*
- * Read a full CR terminated IRC message
- *
- * This function reads from socket into message until message contains a CR.
- * (if message already contains a CR then no reading occurs).
- * The CR is stripped and the contents of message after the CR (i.e. the start
- * of the next message(s)) is copied into next_message for future use.
- * Returns true if message contains a full IRC message, and false otherwise
- */
-bool read_full_message(const int sockfd, char *message, char *next_message) {
-    char buffer[CHUNK_SIZE];
-    int num_read;
-    int cr_index;
-    int total_num_read = 0;
-
-    memset(buffer, '\0', sizeof(buffer));
-
-    // keep reading from socket and appending to message until we find a CR
-    while (!((cr_index = find_cr(message, strlen(message))) < strlen(message))) {
-        if ((num_read = recv(sockfd, buffer, CHUNK_SIZE, 0)) == 0) {
-            chilog(ERROR, "Client closed socket without sending complete message");
-            return false;
-        }
-        strncat(message, buffer, num_read);
-        chilog(DEBUG, "message so far: %s", message);
-        total_num_read += num_read; 
-    }
-
-    // now that there's a CR in message, move the start of the next message
-    strcpy(next_message, message + cr_index + 2);
-    message[cr_index] = '\0';
-    chilog(DEBUG, "current: %s, next: %s", message, next_message);
-    return true;
-
-    // chilog(ERROR, "Client closed socket without sending complete message");
-    // return -1;
-}
-
-void accept_user(int port) {
+void run_server(int port) {
     int sockfd, replysockfd;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in server_addr = init_socket(port);
@@ -263,6 +175,6 @@ int main(int argc, char *argv[]) {
     }
 
     /* Your code goes here */
-    accept_user(atoi(port));
+    run_server(atoi(port));
     return 0;
 }

@@ -1,3 +1,6 @@
+/*
+ * Utility functions for processing IRC messages
+ */
 
 #include <stdio.h>
 
@@ -8,6 +11,12 @@ typedef struct message {
     char *cmd;
     char *args[15];
 } message;
+
+#define CHUNK_SIZE 512
+
+// return index of first carriage return or size if it's not found
+// everything in the string up to returned index should be part of a single message
+int find_cr(const char *str, const int size);
 
 // pretty print prefix, cmd, args of a message at the DEBUG level
 void log_message(const message *msg);
@@ -21,7 +30,6 @@ void log_message(const message *msg);
  */
 void parse_message(char *buffer, message *msg);
 
-// expects prefix and last argument to already be prefixed with :
 /*
  * Write IRC message values into buffer to be written to a socket
  *
@@ -30,3 +38,14 @@ void parse_message(char *buffer, message *msg);
  */
 void write_reply(const char *prefix, const char *cmd, const char **args, 
                  const int num_args, char *buffer);
+
+/*
+ * Read a full CR terminated IRC message from socket
+ *
+ * This function reads from socket in CHUNK_SIZE chunks into message until message
+ * contains a CR (if message already contains a CR then no reading occurs).
+ * The CR is stripped and the contents of message after the CR (i.e. the start
+ * of the next message(s)) is copied into next_message for future use.
+ * Returns true if it was possible to read in a full IRC message, and false otherwise
+ */
+bool read_full_message(const int sockfd, char *message, char *next_message);

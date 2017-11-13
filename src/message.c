@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include "log.h"
 #include "message.h"
@@ -89,4 +92,40 @@ void write_reply(const char *prefix, const char *cmd, const char **args,
 
     buffer[i++] = '\r';
     buffer[i++] = '\n';
+}
+
+int find_cr(const char *str, const int size) {
+    int i = 0;
+    for (; i < size - 1; i++) {
+        if (str[i] == '\r' && str[i + 1] == '\n') {
+            return i;
+        }
+    }
+    return i + 1;
+}
+
+bool read_full_message(const int sockfd, char *message, char *next_message) {
+    char buffer[CHUNK_SIZE];
+    int num_read;
+    int cr_index;
+    int total_num_read = 0;
+
+    memset(buffer, '\0', sizeof(buffer));
+
+    // keep reading from socket and appending to message until we find a CR
+    while (!((cr_index = find_cr(message, strlen(message))) < strlen(message))) {
+        if ((num_read = recv(sockfd, buffer, CHUNK_SIZE, 0)) == 0) {
+            chilog(ERROR, "Client closed socket without sending complete message");
+            return false;
+        }
+        strncat(message, buffer, num_read);
+        chilog(DEBUG, "message so far: %s", message);
+        total_num_read += num_read; 
+    }
+
+    // now that there's a CR in message, move the start of the next message
+    strcpy(next_message, message + cr_index + 2);
+    message[cr_index] = '\0';
+    chilog(DEBUG, "current: %s, next: %s", message, next_message);
+    return true;
 }
