@@ -31,5 +31,6 @@ user *get_user(const char *hostname) {
 }
 
 bool is_user_complete(const user *user) {
+    chilog(DEBUG, "nick: %s, username: %s, name: %s", user->nick, user->username, user->full_name);
     return user->nick != NULL && user->username != NULL && user->full_name != NULL;
 }

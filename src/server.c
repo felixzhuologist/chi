@@ -57,7 +57,7 @@ void handle_user_msg(const char *hostname, const message *msg, char *reply) {
 }
 
 void *handle_client(void *args) {
-    handle_client_args *client = (handle_client_args *) args;
+    user *client = (user *) args;
     int clientsock = client->clientsock;
     int client_addr_len = client->client_addr_len;
     struct sockaddr_in *clientaddr = client->clientaddr;
@@ -117,9 +117,9 @@ void run_server(int port) {
     while (1) {
         struct sockaddr_in cli_addr;
         socklen_t client_addr_len = sizeof(cli_addr);
-        handle_client_args client;
 
         replysockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_len);
+        user client;
         client.clientsock = replysockfd;
         client.client_addr_len = client_addr_len;
         client.clientaddr = &cli_addr;

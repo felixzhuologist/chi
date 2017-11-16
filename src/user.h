@@ -1,8 +1,13 @@
 #include <stdbool.h>
+#include <sys/socket.h>
 
 #define MAX_USERS 100
 
 typedef struct user {
+    int clientsock;
+    socklen_t client_addr_len;
+    struct sockaddr_in *clientaddr;
+
     char *hostname;
     char *nick;
     char *username;
