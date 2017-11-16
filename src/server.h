@@ -15,9 +15,14 @@ void handle_user_msg(const char *hostname, const message *msg, char *reply);
 // write reply into reply arg
 void handle_nick_msg(const char *hostname, const message *msg, char *reply);
 
-// handle al incoming messages for a given client
-void handle_client(const int clientsock, const struct sockaddr_in *clientaddr,
-                   const socklen_t client_addr_len);
+// entrypoint function for handling a new client. listens for messages,
+// sends replies, and updates global state for given client socket
+typedef struct handle_client_args {
+    int clientsock;
+    socklen_t client_addr_len;
+    struct sockaddr_in *clientaddr;
+} handle_client_args;
+void *handle_client(void *args);
 
 // run IRC server on given port
 void run_server(int port);

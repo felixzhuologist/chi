@@ -9,9 +9,8 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#include "message.h"
-#include "user.h"
 #include "reply.h"
+#include "server.h"
 
 void create_rpl_welcome(const user *user, char *reply) {
     char reply_msg[100]; // TODO - get len?
@@ -57,8 +56,12 @@ void handle_user_msg(const char *hostname, const message *msg, char *reply) {
     }
 }
 
-void handle_client(const int clientsock, const struct sockaddr_in *clientaddr,
-                   const socklen_t client_addr_len) {
+void *handle_client(void *args) {
+    handle_client_args *client = (handle_client_args *) args;
+    int clientsock = client->clientsock;
+    int client_addr_len = client->client_addr_len;
+    struct sockaddr_in *clientaddr = client->clientaddr;
+
     char in_buffer[512], next_message[512], reply_buffer[512];
     char client_hostname[100];
     memset(reply_buffer, '\0', sizeof(reply_buffer));
@@ -95,22 +98,32 @@ void handle_client(const int clientsock, const struct sockaddr_in *clientaddr,
         memset(next_message, '\0', sizeof(message));
     }
     close(clientsock);
+    return NULL;
 }
 
 void run_server(int port) {
     int sockfd, replysockfd;
+    // handle_client doesn't return anything useful so run in detached thread
+    // and reuse the same pthread_t since we don't need to join
+    pthread_t tid;
+    pthread_attr_t thread_attrs;
+    pthread_attr_init(&thread_attrs);
+    pthread_attr_setdetachstate(&thread_attrs, PTHREAD_CREATE_DETACHED);
+
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in server_addr = init_socket(port);
-    // TODO: error checking?
     bind(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr));
     listen(sockfd, 5);
-
     while (1) {
         struct sockaddr_in cli_addr;
         socklen_t client_addr_len = sizeof(cli_addr);
+        handle_client_args client;
 
         replysockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_len);
-        handle_client(replysockfd, &cli_addr, client_addr_len);
+        client.clientsock = replysockfd;
+        client.client_addr_len = client_addr_len;
+        client.clientaddr = &cli_addr;
+        pthread_create(&tid, &thread_attrs, handle_client, (void *) &client);
     }
     close(sockfd);
 }
