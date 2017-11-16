@@ -9,11 +9,11 @@ void create_rpl_welcome(const user *user, char *reply);
 
 // Add username and full name specified in message for user associated with
 // given hostname. Writes appropriate reply into reply arg
-void handle_user_msg(const char *hostname, const message *msg, char *reply);
+void handle_user_msg(const message *msg, user *client, char *reply);
 
 // Add nick specified in message for user associated with given hostname and
 // write reply into reply arg
-void handle_nick_msg(const char *hostname, const message *msg, char *reply);
+void handle_nick_msg(const message *msg, user *client, char *reply);
 
 /* entrypoint function for handling a new client
  *

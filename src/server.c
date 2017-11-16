@@ -12,26 +12,6 @@
 #include "reply.h"
 #include "server.h"
 
-void create_rpl_welcome(const user *user, char *reply) {
-    char reply_msg[100]; // TODO - get len?
-    sprintf(reply_msg, ":Welcome to the Internet Relay Network %s!%s@%s",
-        user->nick, user->username, user->hostname);
-    char *reply_args[2] = {user->nick, reply_msg};
-    write_reply(":localhost", RPL_WELCOME, reply_args, 2, reply);
-}
-
-void handle_nick_msg(const char *hostname, const message *msg, char *reply) {
-    user *new_user = get_user(hostname);
-
-    char *nick = msg->args[0];
-    new_user->nick = malloc(strlen(nick) + 1);
-    strcpy(new_user->nick, nick);
-
-    if (is_user_complete(new_user)) {
-        create_rpl_welcome(new_user, reply);
-    }
-}
-
 struct sockaddr_in init_socket(int port) {
     struct sockaddr_in addr;
     bzero((char *) &addr, sizeof(addr));
@@ -41,18 +21,71 @@ struct sockaddr_in init_socket(int port) {
     return addr;
 }
 
-void handle_user_msg(const char *hostname, const message *msg, char *reply) {
-    user *new_user = get_user(hostname);
+void create_rpl_welcome(const user *client, char *reply) {
+    char reply_msg[100]; // TODO - get len?
+    sprintf(reply_msg, ":Welcome to the Internet Relay Network %s!%s@%s",
+        client->nick, client->username, client->hostname);
+    char *reply_args[2] = {client->nick, reply_msg};
+    write_reply(":localhost", RPL_WELCOME, reply_args, 2, reply);
+}
 
-    char *username = msg->args[0]; // don't handle args 1 and 2 for now
-    char *full_name = msg->args[3];
-    new_user->username = malloc(strlen(username) + 1);
-    new_user->full_name = malloc(strlen(full_name) + 1);
-    strcpy(new_user->username, username);
-    strcpy(new_user->full_name, full_name);
+void handle_nick_msg(const message *msg, user *client, char *reply) {
+    char *nick = msg->args[0];
+    if (!(update_nick(nick, client))) {
+        // send ERR_NICKNAMEINUSE
+    }
+}
 
-    if (is_user_complete(new_user)) {
-        create_rpl_welcome(new_user, reply);
+void handle_user_msg(const message *msg, user *client, char *reply) {
+    // send ERR_ALREADYREGISTERED
+}
+
+void handle_msg(const message *msg, user *client, char *reply) {
+    if (strcmp(msg->cmd, "NICK") == 0) {
+        handle_nick_msg(msg, client, reply);
+    } else if (strcmp(msg->cmd, "USER") == 0) {
+        handle_user_msg(msg, client, reply);
+    } else {
+        chilog(WARNING, "Received unknown command %s", msg->cmd);
+    }
+}
+
+void handle_registration(const message *msg, user *client, char *reply) {
+    if (strcmp(msg->cmd, "NICK") == 0) {
+        char *nick = msg->args[0];
+        if (is_nick_in_use(nick, true)) {
+            // send ERR_NICKNAMEINUSE
+        } else {
+            if (client->nick != NULL) {
+                free(client->nick);
+            }
+            client->nick = malloc(strlen(nick) + 1);
+            strcpy(client->nick, nick);
+        }
+    } else if (strcmp(msg->cmd, "USER") == 0) {
+        char *username = msg->args[0]; // don't handle args 1 and 2 for now
+        char *full_name = msg->args[3];
+        if (client->username != NULL) {
+            free(client->username);
+        }
+        if (client->full_name != NULL) {
+            free(client->full_name);
+        }
+        client->username = malloc(strlen(username) + 1);
+        client->full_name = malloc(strlen(full_name) + 1);
+        strcpy(client->username, username);
+        strcpy(client->full_name, full_name);
+    } else {
+        chilog(WARNING, "Received command %s before completing registration", msg->cmd);
+    }
+
+    if (is_user_complete(client)) {
+        if (register_user(client)) {
+            client->is_registered = true;
+            create_rpl_welcome(client, reply);
+        } else {
+            // send ERR_NICKNAMEINUSE
+        }
     }
 }
 
@@ -72,6 +105,8 @@ void *handle_client(void *args) {
         client_hostname, 100, NULL, 0, 0) != 0) {
         perror("Could not get client hostname");
     }
+    client->hostname = malloc(strlen(client_hostname) + 1);
+    strcpy(client->hostname, client_hostname);
 
     chilog(INFO, "Received connection from client: %s", client_hostname);
     while (read_full_message(clientsock, in_buffer, next_message)) {
@@ -80,12 +115,11 @@ void *handle_client(void *args) {
         msg->cmd = NULL;
         parse_message(in_buffer, msg);
         log_message(msg);
-        if (strcmp(msg->cmd, "NICK") == 0) {
-            handle_nick_msg(client_hostname, msg, reply_buffer);
-        } else if (strcmp(msg->cmd, "USER") == 0) {
-            handle_user_msg(client_hostname, msg, reply_buffer);
+ 
+        if (client->is_registered) {
+            handle_msg(msg, client, reply_buffer);
         } else {
-            chilog(WARNING, "Received unknown command %s", msg->cmd);
+            handle_registration(msg, client, reply_buffer);
         }
 
         if (strlen(reply_buffer) > 0) {
@@ -120,9 +154,7 @@ void run_server(int port) {
 
         replysockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_len);
         user client;
-        client.clientsock = replysockfd;
-        client.client_addr_len = client_addr_len;
-        client.clientaddr = &cli_addr;
+        init_user(replysockfd, client_addr_len, &cli_addr, &client);
         pthread_create(&tid, &thread_attrs, handle_client, (void *) &client);
     }
     close(sockfd);
