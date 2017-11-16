@@ -1,7 +1,9 @@
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -55,6 +57,46 @@ void handle_user_msg(const char *hostname, const message *msg, char *reply) {
     }
 }
 
+void handle_client(const int clientsock, const struct sockaddr_in *clientaddr,
+                   const socklen_t client_addr_len) {
+    char in_buffer[512], next_message[512], reply_buffer[512];
+    char client_hostname[100];
+    memset(reply_buffer, '\0', sizeof(reply_buffer));
+    memset(in_buffer, '\0', sizeof(in_buffer));
+    memset(next_message, '\0', sizeof(next_message));
+
+    if (getnameinfo((struct sockaddr *) clientaddr, client_addr_len, 
+        client_hostname, 100, NULL, 0, 0) != 0) {
+        perror("Could not get client hostname");
+    }
+
+    chilog(INFO, "Received connection from client: %s", client_hostname);
+    while (read_full_message(clientsock, in_buffer, next_message)) {
+        message *msg = malloc(sizeof(message));
+        msg->prefix = NULL;
+        msg->cmd = NULL;
+        parse_message(in_buffer, msg);
+        log_message(msg);
+        if (strcmp(msg->cmd, "NICK") == 0) {
+            handle_nick_msg(client_hostname, msg, reply_buffer);
+        } else if (strcmp(msg->cmd, "USER") == 0) {
+            handle_user_msg(client_hostname, msg, reply_buffer);
+        } else {
+            chilog(WARNING, "Received unknown command %s", msg->cmd);
+        }
+
+        if (strlen(reply_buffer) > 0) {
+            chilog(INFO, "reply: %s", reply_buffer);
+            if (send(clientsock, reply_buffer, 512, 0) == -1) {
+                perror("could not send a reply!");
+            }
+        }
+        strcpy(in_buffer, next_message);
+        memset(next_message, '\0', sizeof(message));
+    }
+    close(clientsock);
+}
+
 void run_server(int port) {
     int sockfd, replysockfd;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -67,44 +109,8 @@ void run_server(int port) {
         struct sockaddr_in cli_addr;
         socklen_t client_addr_len = sizeof(cli_addr);
 
-        char in_buffer[512], next_message[512], reply_buffer[512];
-        char client_hostname[100];
-        memset(reply_buffer, '\0', sizeof(reply_buffer));
-        memset(in_buffer, '\0', sizeof(in_buffer));
-        memset(next_message, '\0', sizeof(next_message));
-
         replysockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_len);
-
-        if (getnameinfo((struct sockaddr *) &cli_addr, client_addr_len, 
-            client_hostname, 100, NULL, 0, 0) != 0) {
-            perror("Could not get client hostname");
-        }
-
-        chilog(INFO, "Received connection from client: %s", client_hostname);
-        while (read_full_message(replysockfd, in_buffer, next_message)) {
-            message *msg = malloc(sizeof(message));
-            msg->prefix = NULL;
-            msg->cmd = NULL;
-            parse_message(in_buffer, msg);
-            log_message(msg);
-            if (strcmp(msg->cmd, "NICK") == 0) {
-                handle_nick_msg(client_hostname, msg, reply_buffer);
-            } else if (strcmp(msg->cmd, "USER") == 0) {
-                handle_user_msg(client_hostname, msg, reply_buffer);
-            } else {
-                chilog(WARNING, "Received unknown command %s", msg->cmd);
-            }
-
-            if (strlen(reply_buffer) > 0) {
-                chilog(INFO, "reply: %s", reply_buffer);
-                if (send(replysockfd, reply_buffer, 512, 0) == -1) {
-                    perror("could not send a reply!");
-                }
-            }
-            strcpy(in_buffer, next_message);
-            memset(next_message, '\0', sizeof(message));
-        }
-        close(replysockfd);
+        handle_client(replysockfd, &cli_addr, client_addr_len);
     }
     close(sockfd);
 }
