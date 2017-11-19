@@ -9,6 +9,7 @@
 user *USERS[MAX_USERS] = {NULL};
 
 bool is_user_complete(const user *client) {
+    chilog(DEBUG, "nick: %s, username: %s, name: %s", client->nick, client->username, client->full_name);
     return client->nick != NULL && client->username != NULL && client->full_name != NULL;
 }
 

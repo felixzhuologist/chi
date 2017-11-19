@@ -29,15 +29,25 @@ void create_rpl_welcome(const user *client, char *reply) {
     write_reply(":localhost", RPL_WELCOME, reply_args, 2, reply);
 }
 
+void create_err_nicknameinuse(const char *old_nick, const char *new_nick, char *reply) {
+    char *reply_args[3] = {old_nick, new_nick, ":Nickname is already in use."};
+    write_reply(":localhost", ERR_NICKNAMEINUSE, reply_args, 3, reply);
+}
+
+void create_err_alreadyregistred(const user *client, char *reply) {
+    char *reply_args[2] = {client->nick, ":Unauthorized command (already registered)"};
+    write_reply(":localhost", ERR_ALREADYREGISTRED, reply_args, 2, reply);
+}
+
 void handle_nick_msg(const message *msg, user *client, char *reply) {
     char *nick = msg->args[0];
     if (!(update_nick(nick, client))) {
-        // send ERR_NICKNAMEINUSE
+        create_err_nicknameinuse(client->nick, nick, reply);
     }
 }
 
 void handle_user_msg(const message *msg, user *client, char *reply) {
-    // send ERR_ALREADYREGISTERED
+    create_err_alreadyregistred(client, reply);
 }
 
 void handle_msg(const message *msg, user *client, char *reply) {
@@ -54,7 +64,7 @@ void handle_registration(const message *msg, user *client, char *reply) {
     if (strcmp(msg->cmd, "NICK") == 0) {
         char *nick = msg->args[0];
         if (is_nick_in_use(nick, true)) {
-            // send ERR_NICKNAMEINUSE
+            create_err_nicknameinuse("*", nick, reply);
         } else {
             if (client->nick != NULL) {
                 free(client->nick);
@@ -84,7 +94,7 @@ void handle_registration(const message *msg, user *client, char *reply) {
             client->is_registered = true;
             create_rpl_welcome(client, reply);
         } else {
-            // send ERR_NICKNAMEINUSE
+            create_err_nicknameinuse("*", client->nick, reply);
         }
     }
 }
@@ -153,9 +163,9 @@ void run_server(int port) {
         socklen_t client_addr_len = sizeof(cli_addr);
 
         replysockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &client_addr_len);
-        user client;
-        init_user(replysockfd, client_addr_len, &cli_addr, &client);
-        pthread_create(&tid, &thread_attrs, handle_client, (void *) &client);
+        user *client = malloc(sizeof(user));
+        init_user(replysockfd, client_addr_len, &cli_addr, client);
+        pthread_create(&tid, &thread_attrs, handle_client, (void *) client);
     }
     close(sockfd);
 }
