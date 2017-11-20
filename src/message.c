@@ -50,12 +50,20 @@ void parse_message(char *buffer, message *msg) {
         if (token == NULL) { // keep setting the rest of the entries to null
             continue;
         }
+        chilog(DEBUG, "token %s", token);
         if (strlen(token) > 0 && token[0] == ':') {
             char *rest = strtok(NULL, "");
-            msg->args[i] = malloc(strlen(token) + strlen(rest));
-            strcpy(msg->args[i], token + 1);
-            strcat(msg->args[i], " ");
-            strcat(msg->args[i], rest);
+            int arglength = strlen(token);
+            if (rest != NULL) {
+                arglength += strlen(rest);
+            }
+            msg->args[i] = malloc(arglength);
+            chilog(DEBUG, "token: %s, rest: %s", token, rest);
+            strcpy(msg->args[i], token + 1); // cut off ':'
+            if (rest != NULL) {
+                strcat(msg->args[i], " ");
+                strcat(msg->args[i], rest);            
+            }
         } else {
             msg->args[i] = malloc(strlen(token));
             strcpy(msg->args[i], token);
