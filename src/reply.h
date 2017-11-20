@@ -1,5 +1,4 @@
 // Reply codes
-#include "user.h"
 
 #ifndef REPLY_H_
 #define REPLY_H_
@@ -64,7 +63,7 @@
 #define ERR_UMODEUNKNOWNFLAG	"501"
 #define ERR_USERSDONTMATCH		"502"
 
-#endif /* REPLY_H_ */
+#include "user.h"
 
 // utility function that prepends the server's hostname to the reply and
 // then sends it across the client's socket. Assumes that reply is null terminated
@@ -75,5 +74,7 @@ void send_rpl_welcome(user *client);
 void send_rpl_yourhost(user *client);
 void send_rpl_created(user *client);
 void send_rpl_myinfo(user *client);
-void send_err_nicknameinuse(user *client);
+void send_err_nicknameinuse(user *client, char *old_nick, char *new_nick);
 void send_err_alreadyregistred(user *client);
+
+#endif /* REPLY_H_ */

@@ -32,15 +32,6 @@ void log_message(const message *msg);
 void parse_message(char *buffer, message *msg);
 
 /*
- * Write IRC message values into buffer to be written to a socket
- *
- * Essentially just writes values, adding spaces as appropriate into the
- * buffer. Does not add colons to the prefix or the last argument
- */
-void write_reply(const char *prefix, const char *cmd, const char **args, 
-                 const int num_args, char *buffer);
-
-/*
  * Read a full CR terminated IRC message from socket
  *
  * This function reads from socket in CHUNK_SIZE chunks into message until message

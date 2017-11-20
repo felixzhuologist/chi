@@ -64,36 +64,6 @@ void parse_message(char *buffer, message *msg) {
     }
 }
 
-// expects prefix and last argument to already be prefixed with :
-void write_reply(const char *prefix, const char *cmd, const char **args, 
-                 const int num_args, char *buffer) {
-    int i = 0;
-
-    // prefix
-    if (prefix != NULL && strlen(prefix) > 0) {
-        strcpy(buffer + i, prefix);
-        i += strlen(prefix);
-        buffer[i++] = ' ';
-    }
-
-    // cmd
-    strcpy(buffer + i, cmd);
-    i += strlen(cmd);
-
-    // args
-    for (int j = 0; j < (num_args < 15 ? num_args : 15); j++) {
-        if (args[j] == NULL && strlen(args[j]) > 0) {
-            break;
-        }
-        buffer[i++] = ' ';
-        strcpy(buffer + i, args[j]);
-        i += strlen(args[j]);
-    }
-
-    buffer[i++] = '\r';
-    buffer[i++] = '\n';
-}
-
 int find_cr(const char *str, const int size) {
     int i = 0;
     for (; i < size - 1; i++) {

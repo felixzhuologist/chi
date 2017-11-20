@@ -1,4 +1,4 @@
-OBJS = src/main.o src/server.o src/log.o src/message.o src/user.o
+OBJS = src/main.o src/server.o src/log.o src/message.o src/user.o src/reply.o
 DEPS = $(OBJS:.o=.d)
 CC = gcc
 CFLAGS = -g3 -Wall -fpic -std=gnu99 -MMD -MP

@@ -21,50 +21,32 @@ struct sockaddr_in init_socket(int port) {
     return addr;
 }
 
-void create_rpl_welcome(const user *client, char *reply) {
-    char reply_msg[100]; // TODO - get len?
-    sprintf(reply_msg, ":Welcome to the Internet Relay Network %s!%s@%s",
-        client->nick, client->username, client->hostname);
-    char *reply_args[2] = {client->nick, reply_msg};
-    write_reply(":localhost", RPL_WELCOME, reply_args, 2, reply);
-}
-
-void create_err_nicknameinuse(const char *old_nick, const char *new_nick, char *reply) {
-    char *reply_args[3] = {old_nick, new_nick, ":Nickname is already in use."};
-    write_reply(":localhost", ERR_NICKNAMEINUSE, reply_args, 3, reply);
-}
-
-void create_err_alreadyregistred(const user *client, char *reply) {
-    char *reply_args[2] = {client->nick, ":Unauthorized command (already registered)"};
-    write_reply(":localhost", ERR_ALREADYREGISTRED, reply_args, 2, reply);
-}
-
-void handle_nick_msg(const message *msg, user *client, char *reply) {
+void handle_nick_msg(const message *msg, user *client) {
     char *nick = msg->args[0];
     if (!(update_nick(nick, client))) {
-        create_err_nicknameinuse(client->nick, nick, reply);
+        send_err_nicknameinuse(client, client->nick, nick);
     }
 }
 
-void handle_user_msg(const message *msg, user *client, char *reply) {
-    create_err_alreadyregistred(client, reply);
+void handle_user_msg(const message *msg, user *client) {
+    send_err_alreadyregistred(client);
 }
 
-void handle_msg(const message *msg, user *client, char *reply) {
+void handle_msg(const message *msg, user *client) {
     if (strcmp(msg->cmd, "NICK") == 0) {
-        handle_nick_msg(msg, client, reply);
+        handle_nick_msg(msg, client);
     } else if (strcmp(msg->cmd, "USER") == 0) {
-        handle_user_msg(msg, client, reply);
+        handle_user_msg(msg, client);
     } else {
         chilog(WARNING, "Received unknown command %s", msg->cmd);
     }
 }
 
-void handle_registration(const message *msg, user *client, char *reply) {
+void handle_registration(const message *msg, user *client) {
     if (strcmp(msg->cmd, "NICK") == 0) {
         char *nick = msg->args[0];
         if (is_nick_in_use(nick, true)) {
-            create_err_nicknameinuse("*", nick, reply);
+            send_err_nicknameinuse(client, "*", nick);
         } else {
             if (client->nick != NULL) {
                 free(client->nick);
@@ -92,9 +74,9 @@ void handle_registration(const message *msg, user *client, char *reply) {
     if (is_user_complete(client)) {
         if (register_user(client)) {
             client->is_registered = true;
-            create_rpl_welcome(client, reply);
+            send_rpl_welcome(client);
         } else {
-            create_err_nicknameinuse("*", client->nick, reply);
+            send_err_nicknameinuse(client, "*", client->nick);
         }
     }
 }
@@ -105,9 +87,9 @@ void *handle_client(void *args) {
     int client_addr_len = client->client_addr_len;
     struct sockaddr_in *clientaddr = client->clientaddr;
 
-    char in_buffer[512], next_message[512], reply_buffer[512];
+    char in_buffer[512], next_message[512];
     char client_hostname[100];
-    memset(reply_buffer, '\0', sizeof(reply_buffer));
+    // memset(reply_buffer, '\0', sizeof(reply_buffer));
     memset(in_buffer, '\0', sizeof(in_buffer));
     memset(next_message, '\0', sizeof(next_message));
 
@@ -127,17 +109,17 @@ void *handle_client(void *args) {
         log_message(msg);
  
         if (client->is_registered) {
-            handle_msg(msg, client, reply_buffer);
+            handle_msg(msg, client);
         } else {
-            handle_registration(msg, client, reply_buffer);
+            handle_registration(msg, client);
         }
 
-        if (strlen(reply_buffer) > 0) {
-            chilog(INFO, "reply: %s", reply_buffer);
-            if (send(clientsock, reply_buffer, 512, 0) == -1) {
-                perror("could not send a reply!");
-            }
-        }
+        // if (strlen(reply_buffer) > 0) {
+        //     chilog(INFO, "reply: %s", reply_buffer);
+        //     if (send(clientsock, reply_buffer, 512, 0) == -1) {
+        //         perror("could not send a reply!");
+        //     }
+        // }
         strcpy(in_buffer, next_message);
         memset(next_message, '\0', sizeof(message));
     }
