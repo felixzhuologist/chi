@@ -1,10 +1,5 @@
-/*
- *
- *  chirc
- *
- *  Reply codes
- *
- */
+// Reply codes
+#include "user.h"
 
 #ifndef REPLY_H_
 #define REPLY_H_
@@ -70,3 +65,15 @@
 #define ERR_USERSDONTMATCH		"502"
 
 #endif /* REPLY_H_ */
+
+// utility function that prepends the server's hostname to the reply and
+// then sends it across the client's socket. Assumes that reply is null terminated
+void send_reply(user *client, char *reply);
+
+// the following functions send the specified message to the client:
+void send_rpl_welcome(user *client);
+void send_rpl_yourhost(user *client);
+void send_rpl_created(user *client);
+void send_rpl_myinfo(user *client);
+void send_err_nicknameinuse(user *client);
+void send_err_alreadyregistred(user *client);

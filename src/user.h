@@ -1,3 +1,6 @@
+#ifndef USER_H
+#define USER_H
+
 #include <stdbool.h>
 #include <sys/socket.h>
 
@@ -34,3 +37,5 @@ bool is_user_complete(const user *client);
 bool is_nick_in_use(const char *nick, const bool grab_lock);
 
 bool update_nick(const char* new_nick, user *client);
+
+#endif

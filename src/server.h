@@ -4,7 +4,7 @@
 // return IPv4 sockaddr listening on all addresses and on given port
 struct sockaddr_in init_socket(int port);
 
-// write RPL_WELCOME message into reply arg based on input user
+// create reply for a successful registration, i.e. replies 001 - 004
 void create_rpl_welcome(const user *user, char *reply);
 
 // expects user to pass in "*" if no nick has been set yet
