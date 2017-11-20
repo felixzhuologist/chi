@@ -22,7 +22,7 @@ void send_reply(user *client, char *reply) {
     chilog(ERROR, "sending clipped reply longer than 512 chars");
   }
 
-  chilog(DEBUG, "reply: %s", full_reply);
+  chilog(INFO, "reply: %s", full_reply);
   int sent_size = send(client->clientsock, full_reply, msg_size, 0);
   if (sent_size == -1) {
     chilog(ERROR, "could not send a reply, send() returned -1");
@@ -48,13 +48,13 @@ void send_rpl_yourhost(user *client) {
 void send_rpl_created(user *client) {
   char reply[512];
   sprintf(reply, "%s %s :This server was created %s",
-    RPL_YOURHOST,client->nick, created);
+    RPL_CREATED,client->nick, created);
   send_reply(client, reply);
 }
 
 void send_rpl_myinfo(user *client) {
   char reply[512];
-  sprintf(reply, "%s %s :%s %s %s %s",
+  sprintf(reply, "%s %s %s %s %s %s",
     RPL_MYINFO,client->nick, server_name, version, user_modes, channel_modes);
   send_reply(client, reply);
 }
@@ -74,4 +74,61 @@ void send_err_alreadyregistred(user *client) {
   sprintf(reply, "%s %s :Unauthorized command (already registered)",
     ERR_ALREADYREGISTRED, client->nick);
   send_reply(client, reply);
+}
+
+void send_rpl_luserclient(user *client) {
+  char reply[512];
+  sprintf(reply, "%s %s :There are 1 users and 0 services on 1 servers",
+    RPL_LUSERCLIENT, client->nick);
+  send_reply(client, reply);
+}
+
+void send_rpl_luserop(user *client) {
+  char reply[512];
+  sprintf(reply, "%s %s 0 :operator(s) online",
+    RPL_LUSEROP, client->nick);
+  send_reply(client, reply);
+}
+
+void send_rpl_luserunknown(user *client) {
+  char reply[512];
+  sprintf(reply, "%s %s 0 :unknown connection(s)",
+    RPL_LUSERUNKNOWN, client->nick);
+  send_reply(client, reply);
+}
+
+void send_rpl_luserchannels(user *client) {
+  char reply[512];
+  sprintf(reply, "%s %s 0 :channels formed",
+    RPL_LUSERCHANNELS, client->nick);
+  send_reply(client, reply);
+}
+
+void send_rpl_luserme(user *client) {
+  char reply[512];
+  sprintf(reply, "%s %s :I have 1 clients and 1 servers",
+    RPL_LUSERME, client->nick);
+  send_reply(client, reply);
+}
+
+void send_err_nomotd(user *client) {
+  char reply[512];
+  sprintf(reply, "%s %s :MOTD File is missing",
+    ERR_NOMOTD, client->nick);
+  send_reply(client, reply);
+}
+
+void send_registration_response(user *client) {
+  send_rpl_welcome(client);
+  send_rpl_yourhost(client);
+  send_rpl_created(client);
+  send_rpl_myinfo(client);
+
+  send_rpl_luserclient(client);
+  send_rpl_luserop(client);
+  send_rpl_luserunknown(client);
+  send_rpl_luserchannels(client);
+  send_rpl_luserme(client);
+
+  send_err_nomotd(client);
 }

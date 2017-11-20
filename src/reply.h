@@ -69,6 +69,9 @@
 // then sends it across the client's socket. Assumes that reply is null terminated
 void send_reply(user *client, char *reply);
 
+// wrapper that sends welcome, motd, and lusers messages on new client registration
+void send_registration_response(user *client);
+
 // the following functions send the specified message to the client:
 void send_rpl_welcome(user *client);
 void send_rpl_yourhost(user *client);
@@ -76,5 +79,13 @@ void send_rpl_created(user *client);
 void send_rpl_myinfo(user *client);
 void send_err_nicknameinuse(user *client, char *old_nick, char *new_nick);
 void send_err_alreadyregistred(user *client);
+
+void send_rpl_luserclient(user *client);
+void send_rpl_luserop(user *client);
+void send_rpl_luserunknown(user *client);
+void send_rpl_luserchannels(user *client);
+void send_rpl_lusername(user *client);
+
+void send_err_nomotd(user *client);
 
 #endif /* REPLY_H_ */

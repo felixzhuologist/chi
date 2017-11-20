@@ -74,7 +74,7 @@ void handle_registration(const message *msg, user *client) {
     if (is_user_complete(client)) {
         if (register_user(client)) {
             client->is_registered = true;
-            send_rpl_welcome(client);
+            send_registration_response(client);
         } else {
             send_err_nicknameinuse(client, "*", client->nick);
         }
