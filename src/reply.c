@@ -30,6 +30,7 @@ void send_reply(user *client, char *reply) {
     chilog(ERROR, "reply was fragmented");
   }
 }
+
 void send_rpl_welcome(user *client) {
   char reply[512];
   sprintf(reply, "%s %s :Welcome to the Internet Relay Network %s!%s@%s",
@@ -131,4 +132,10 @@ void send_registration_response(user *client) {
   send_rpl_luserme(client);
 
   send_err_nomotd(client);
+}
+
+void send_quit_response(user *client, char *message) {
+  char reply[512];
+  sprintf(reply, "QUIT :%s", message);
+  send_reply(client, reply);
 }

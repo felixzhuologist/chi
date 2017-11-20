@@ -32,11 +32,19 @@ void handle_user_msg(const message *msg, user *client) {
     send_err_alreadyregistred(client);
 }
 
+void handle_quit_msg(const message *msg, user *client) {
+    send_quit_response(client, msg->args[0]);
+    close(client->clientsock);
+    delete_user(client);
+}
+
 void handle_msg(const message *msg, user *client) {
     if (strcmp(msg->cmd, "NICK") == 0) {
         handle_nick_msg(msg, client);
     } else if (strcmp(msg->cmd, "USER") == 0) {
         handle_user_msg(msg, client);
+    } else if (strcmp(msg->cmd, "QUIT") == 0) {
+        handle_quit_msg(msg, client);
     } else {
         chilog(WARNING, "Received unknown command %s", msg->cmd);
     }
@@ -67,6 +75,8 @@ void handle_registration(const message *msg, user *client) {
         client->full_name = malloc(strlen(full_name) + 1);
         strcpy(client->username, username);
         strcpy(client->full_name, full_name);
+    } else if (strcmp(msg->cmd, "QUIT") == 0) {
+        handle_quit_msg(msg, client);
     } else {
         chilog(WARNING, "Received command %s before completing registration", msg->cmd);
     }

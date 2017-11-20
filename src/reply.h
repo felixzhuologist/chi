@@ -1,4 +1,11 @@
-// Reply codes
+/*
+ * Functions for creating responses
+ *
+ * Defines constants for each response code and a function that knows how to
+ * construct and send each response (send_RPL_x() or send_ERR_y()). Also includes
+ * some higher level functions when a non numeric reply or multiple numeric replies
+ * must be sent.
+ */
 
 #ifndef REPLY_H_
 #define REPLY_H_
@@ -87,5 +94,6 @@ void send_err_nomotd(user *client);
 
 // wrapper that sends welcome, motd, and lusers messages on new client registration
 void send_registration_response(user *client);
+void send_quit_response(user *client, char *message);
 
 #endif /* REPLY_H_ */

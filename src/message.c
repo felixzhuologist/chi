@@ -95,6 +95,9 @@ bool read_full_message(const int sockfd, char *message, char *next_message) {
         if ((num_read = recv(sockfd, buffer, CHUNK_SIZE, 0)) == 0) {
             chilog(ERROR, "Client closed socket without sending complete message");
             return false;
+        } else if (num_read == -1) {
+            chilog(DEBUG, "Closed socket to client");
+            return false;
         }
         strncat(message, buffer, num_read);
         chilog(DEBUG, "message so far: %s", message);

@@ -20,10 +20,13 @@ typedef struct user {
 
 void init_user(int clientsock, socklen_t client_addr_len,
                struct sockaddr_in *clientaddr, user *client);
+void free_user(user *client);
 
 // add user to the list of users. return true on sucess, false on failure
 // (i.e. nick is in use)
 bool register_user(user *client);
+
+void delete_user(user *client);
 
 // return true if all information about user (nick, username, name) is complete
 // and user is ready to be registered
