@@ -89,7 +89,6 @@ void *handle_client(void *args) {
 
     char in_buffer[512], next_message[512];
     char client_hostname[100];
-    // memset(reply_buffer, '\0', sizeof(reply_buffer));
     memset(in_buffer, '\0', sizeof(in_buffer));
     memset(next_message, '\0', sizeof(next_message));
 
@@ -114,12 +113,6 @@ void *handle_client(void *args) {
             handle_registration(msg, client);
         }
 
-        // if (strlen(reply_buffer) > 0) {
-        //     chilog(INFO, "reply: %s", reply_buffer);
-        //     if (send(clientsock, reply_buffer, 512, 0) == -1) {
-        //         perror("could not send a reply!");
-        //     }
-        // }
         strcpy(in_buffer, next_message);
         memset(next_message, '\0', sizeof(message));
     }
