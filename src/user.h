@@ -22,22 +22,19 @@ void init_user(int clientsock, socklen_t client_addr_len,
                struct sockaddr_in *clientaddr, user *client);
 void free_user(user *client);
 
+// return true if all information about user (nick, username, name) is complete
+// and user is ready to be registered
+bool is_user_complete(const user *client);
+
+// get user with given nick. call with grab_lock set to false if caller is managing
+// the USERS lock
+user *get_user(const char *nick, const bool grab_lock);
+
 // add user to the list of users. return true on sucess, false on failure
 // (i.e. nick is in use)
 bool register_user(user *client);
 
 void delete_user(user *client);
-
-// return true if all information about user (nick, username, name) is complete
-// and user is ready to be registered
-bool is_user_complete(const user *client);
-
-/* return true if a user is already using the current nick, false otherwise
- *
- * nick: nick to check for
- * grab_lock: set to false if the caller already has the USERS lock
- */
-bool is_nick_in_use(const char *nick, const bool grab_lock);
 
 bool update_nick(const char* new_nick, user *client);
 

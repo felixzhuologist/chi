@@ -40,21 +40,21 @@ bool is_user_complete(const user *client) {
     return client->nick != NULL && client->username != NULL && client->full_name != NULL;
 }
 
-bool is_nick_in_use(const char *nick, const bool grab_lock) {
+user *get_user(const char *nick, const bool grab_lock) {
     // grab lock
     for (int i = 0; i < MAX_USERS; i++) {
         if (USERS[i] && USERS[i]->nick && strcmp(USERS[i]->nick, nick) == 0) {
             // release lock
-            return true;
+            return USERS[i];
         }
     }
     // release lock
-    return false;
+    return NULL;
 }
 
 bool register_user(user *client) {
     // grab lock
-    if (is_nick_in_use(client->nick, false)) {
+    if (get_user(client->nick, false)) {
         // release lock
         return false;
     }
@@ -80,7 +80,7 @@ void delete_user(user *client) {
 
 bool update_nick(const char *new_nick, user *client) {
     // grab lock
-    if (is_nick_in_use(client->nick, false)) {
+    if (get_user(client->nick, false)) {
         // release lock
         return false;
     }

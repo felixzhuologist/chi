@@ -91,9 +91,12 @@ void send_rpl_luserchannels(user *client);
 void send_rpl_luserme(user *client);
 
 void send_err_nomotd(user *client);
+void send_err_nosuchnick(user *client, char *nick);
 
 // wrapper that sends welcome, motd, and lusers messages on new client registration
 void send_registration_response(user *client);
 void send_quit_response(user *client, char *message);
+// send message from client to recipient. message_type should be one of PRIVMSG, NOTICE
+void send_privmsg(user *client, user *recipient, char *message, char *message_type);
 
 #endif /* REPLY_H_ */

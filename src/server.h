@@ -12,6 +12,10 @@ void handle_user_msg(const message *msg, user *client);
 // write reply into reply arg
 void handle_nick_msg(const message *msg, user *client);
 
+void handle_privmsg_msg(const message *msg, user *client);
+
+void handle_notice_msg(const message *msg, user *client);
+
 // Handle message for a registered user
 void handle_msg(const message *msg, user *client);
 

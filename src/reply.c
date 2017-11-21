@@ -119,6 +119,13 @@ void send_err_nomotd(user *client) {
   send_reply(client, reply);
 }
 
+void send_err_nosuchnick(user *client, char *nick) {
+  char reply[512];
+  sprintf(reply, "%s %s %s :No such nick/channel",
+    ERR_NOSUCHNICK, client->nick, nick);
+  send_reply(client, reply);
+}
+
 void send_registration_response(user *client) {
   send_rpl_welcome(client);
   send_rpl_yourhost(client);
@@ -139,4 +146,21 @@ void send_quit_response(user *client, char *message) {
   const char *reason = message == NULL ? "Client Quit" : message;
   sprintf(reply, "ERROR :Closing Link: %s (%s)", client->hostname, reason);
   send_reply(client, reply);
+}
+
+// TODO: refactor duplicate code from send_reply
+void send_privmsg(user *client, user *recipient, char *message, char *message_type) {
+  char reply[513];
+  int msg_size = snprintf(reply, 513, ":%s!%s@%s %s %s :%s\r\n",
+    client->nick, client->username, client->hostname, message_type, recipient->nick, message);
+  if (msg_size > 513) {
+    chilog(ERROR, "sending privmsg longer than 512 chars");
+  }
+
+  int sent_size = send(recipient->clientsock, reply, msg_size, 0);
+  if (sent_size == -1) {
+    chilog(ERROR, "could not send a reply, send() returned -1");
+  } else if (sent_size < msg_size) { // TODO: send entire message
+    chilog(ERROR, "reply was fragmented");
+  }
 }

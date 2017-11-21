@@ -38,6 +38,23 @@ void handle_quit_msg(const message *msg, user *client) {
     delete_user(client);
 }
 
+void handle_privmsg_msg(const message *msg, user *client) {
+    user *recipient = get_user(msg->args[0], true);
+    if (recipient) {
+        send_privmsg(client, recipient, msg->args[1], "PRIVMSG");    
+    } else {
+        chilog(DEBUG, "sending message to unknown user %s", msg->args[0]);
+        send_err_nosuchnick(client, msg->args[0]);
+    }
+}
+
+void handle_notice_msg(const message *msg, user *client) {
+    user *recipient = get_user(msg->args[0], true);
+    if (recipient) {
+        send_privmsg(client, recipient, msg->args[1], "NOTICE");    
+    }
+}
+
 void handle_msg(const message *msg, user *client) {
     if (strcmp(msg->cmd, "NICK") == 0) {
         handle_nick_msg(msg, client);
@@ -45,6 +62,10 @@ void handle_msg(const message *msg, user *client) {
         handle_user_msg(msg, client);
     } else if (strcmp(msg->cmd, "QUIT") == 0) {
         handle_quit_msg(msg, client);
+    } else if (strcmp(msg->cmd, "PRIVMSG") == 0) {
+        handle_privmsg_msg(msg, client);
+    } else if (strcmp(msg->cmd, "NOTICE") == 0) {
+        handle_notice_msg(msg, client);
     } else {
         chilog(WARNING, "Received unknown command %s", msg->cmd);
     }
@@ -53,7 +74,7 @@ void handle_msg(const message *msg, user *client) {
 void handle_registration(const message *msg, user *client) {
     if (strcmp(msg->cmd, "NICK") == 0) {
         char *nick = msg->args[0];
-        if (is_nick_in_use(nick, true)) {
+        if (get_user(nick, true)) {
             send_err_nicknameinuse(client, "*", nick);
         } else {
             if (client->nick != NULL) {
