@@ -65,7 +65,7 @@ void send_rpl_myinfo(user *client) {
 // when the user call's NICK but is when they call USER and we try to register
 void send_err_nicknameinuse(user *client, char *old_nick, char *new_nick) {
   char reply[512];
-  sprintf(reply, "%s %s %s :Nickname is already in use.",
+  sprintf(reply, "%s %s %s :Nickname is already in use",
     ERR_NICKNAMEINUSE, old_nick, new_nick);
   send_reply(client, reply);
 }
@@ -136,6 +136,7 @@ void send_registration_response(user *client) {
 
 void send_quit_response(user *client, char *message) {
   char reply[512];
-  sprintf(reply, "QUIT :%s", message);
+  const char *reason = message == NULL ? "Client Quit" : message;
+  sprintf(reply, "ERROR :Closing Link: %s (%s)", client->hostname, reason);
   send_reply(client, reply);
 }
