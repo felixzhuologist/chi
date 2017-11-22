@@ -60,6 +60,25 @@ void send_rpl_myinfo(user *client) {
   send_reply(client, reply);
 }
 
+void send_rpl_motdstart(user *client) {
+  char reply[512];
+  sprintf(reply, "%s %s :- %s Message of the day - ",
+    RPL_MOTDSTART, client->nick, server_name);
+  send_reply(client, reply);
+}
+
+void send_rpl_motd(user *client, char *motd_line) {
+  char reply[512];
+  sprintf(reply, "%s %s :- %s", RPL_MOTD, client->nick, motd_line);
+  send_reply(client, reply);
+}
+
+void send_rpl_endofmotd(user *client) {
+  char reply[512];
+  sprintf(reply, "%s %s :End of MOTD command", RPL_ENDOFMOTD, client->nick);
+  send_reply(client, reply);
+}
+
 // we need to take old_nick as an arg because the client might have nick
 // defined but not be registered yet, e.g. if a new user's nickname is not in use
 // when the user call's NICK but is when they call USER and we try to register
@@ -126,6 +145,12 @@ void send_err_nosuchnick(user *client, char *nick) {
   send_reply(client, reply);
 }
 
+void send_err_unknowncommand(user *client, char *cmd) {
+  char reply[512];
+  sprintf(reply, "%s %s %s :Unknown command", ERR_UNKNOWNCOMMAND, client->nick, cmd);
+  send_reply(client, reply);
+}
+
 void send_registration_response(user *client) {
   send_rpl_welcome(client);
   send_rpl_yourhost(client);
@@ -163,4 +188,10 @@ void send_privmsg(user *client, user *recipient, char *message, char *message_ty
   } else if (sent_size < msg_size) { // TODO: send entire message
     chilog(ERROR, "reply was fragmented");
   }
+}
+
+void send_pong(user *client) {
+  char reply[512];
+  sprintf(reply, "PONG %s", server_name);
+  send_reply(client, reply);
 }

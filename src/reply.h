@@ -81,22 +81,26 @@ void send_rpl_welcome(user *client);
 void send_rpl_yourhost(user *client);
 void send_rpl_created(user *client);
 void send_rpl_myinfo(user *client);
-void send_err_nicknameinuse(user *client, char *old_nick, char *new_nick);
-void send_err_alreadyregistred(user *client);
-
+void send_rpl_motdstart(user *client);
+void send_rpl_motd(user *client, char *motd_line);
+void send_rpl_endofmotd(user *client);
 void send_rpl_luserclient(user *client);
 void send_rpl_luserop(user *client);
 void send_rpl_luserunknown(user *client);
 void send_rpl_luserchannels(user *client);
 void send_rpl_luserme(user *client);
 
+void send_err_nicknameinuse(user *client, char *old_nick, char *new_nick);
+void send_err_alreadyregistred(user *client);
 void send_err_nomotd(user *client);
 void send_err_nosuchnick(user *client, char *nick);
+void send_err_unknowncommand(user *client, char *cmd);
 
 // wrapper that sends welcome, motd, and lusers messages on new client registration
 void send_registration_response(user *client);
 void send_quit_response(user *client, char *message);
 // send message from client to recipient. message_type should be one of PRIVMSG, NOTICE
 void send_privmsg(user *client, user *recipient, char *message, char *message_type);
+void send_pong(user *client);
 
 #endif /* REPLY_H_ */

@@ -4,17 +4,13 @@
 // return IPv4 sockaddr listening on all addresses and on given port
 struct sockaddr_in init_socket(int port);
 
-// Add username and full name specified in message for user associated with
-// given hostname. Writes appropriate reply into reply arg
 void handle_user_msg(const message *msg, user *client);
-
-// Add nick specified in message for user associated with given hostname and
-// write reply into reply arg
 void handle_nick_msg(const message *msg, user *client);
-
 void handle_privmsg_msg(const message *msg, user *client);
-
 void handle_notice_msg(const message *msg, user *client);
+
+void handle_pong_msg(user *client);
+void handle_motd_msg(user *client);
 
 // Handle message for a registered user
 void handle_msg(const message *msg, user *client);

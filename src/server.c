@@ -55,6 +55,34 @@ void handle_notice_msg(const message *msg, user *client) {
     }
 }
 
+void handle_ping_msg(user *client) {
+    send_pong(client);
+}
+
+void handle_motd_msg(user *client) {
+    FILE *motdfile;
+    motdfile = fopen("motd.txt", "r");
+    if (motdfile) {
+        send_rpl_motdstart(client);
+
+        char *line = NULL;
+        size_t len = 0;
+        ssize_t read;
+        while ((read = getline(&line, &len, motdfile)) != -1) {
+            // TODO: break up lines that don't fit in a single IRC message?
+            send_rpl_motd(client, line);
+        }
+        fclose(motdfile);
+        if (line) {
+            free(line);
+        }
+
+        send_rpl_endofmotd(client);
+    } else {
+        send_err_nomotd(client);
+    }
+}
+
 void handle_msg(const message *msg, user *client) {
     if (strcmp(msg->cmd, "NICK") == 0) {
         handle_nick_msg(msg, client);
@@ -66,8 +94,14 @@ void handle_msg(const message *msg, user *client) {
         handle_privmsg_msg(msg, client);
     } else if (strcmp(msg->cmd, "NOTICE") == 0) {
         handle_notice_msg(msg, client);
+    } else if (strcmp(msg->cmd, "PING") == 0) {
+        handle_ping_msg(client);
+    } else if (strcmp(msg->cmd, "PONG") == 0) {
+    } else if (strcmp(msg->cmd, "MOTD") == 0) {
+        handle_motd_msg(client);
     } else {
         chilog(WARNING, "Received unknown command %s", msg->cmd);
+        send_err_unknowncommand(client, msg->cmd);
     }
 }
 
