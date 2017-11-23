@@ -10,11 +10,12 @@
 #include "message.h"
 
 void log_message(const message *msg) {
-    if (msg->prefix != NULL) {
-        chilog(INFO, "prefix: %s", msg->prefix);
-    }
-    if (msg->cmd != NULL) {
-       chilog(INFO, "cmd: %s", msg->cmd); 
+    chilog(INFO, "prefix: %s", msg->prefix != NULL ? msg->prefix : "");
+    chilog(INFO, "cmd: %s", msg->cmd != NULL ? msg->cmd : "");
+
+    if (msg->args[0] == NULL) {
+        chilog(INFO, "args: []");
+        return;
     }
     chilog(INFO, "args:");
     int i = 0;
@@ -109,4 +110,10 @@ bool read_full_message(const int sockfd, char *message, char *next_message) {
     message[cr_index] = '\0';
     chilog(DEBUG, "current: %s, next: %s", message, next_message);
     return true;
+}
+
+bool is_valid(message *msg) {
+    // should eventually validate based on msg type, but for now just check that
+    // there is a command in the msg
+    return msg->cmd != NULL;
 }

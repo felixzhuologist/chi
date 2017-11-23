@@ -92,3 +92,14 @@ bool update_nick(const char *new_nick, user *client) {
     // release lock
     return true;
 }
+
+int get_num_users() {
+    int num_users = 0;
+    // lock
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (USERS[i] != NULL) {
+            num_users++;
+        }
+    }
+    return num_users;
+}

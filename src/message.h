@@ -2,6 +2,9 @@
  * Utility functions for processing IRC messages
  */
 
+#ifndef MESSAGE_H_
+#define MESSAGE_H_
+
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -41,3 +44,7 @@ void parse_message(char *buffer, message *msg);
  * Returns true if it was possible to read in a full IRC message, and false otherwise
  */
 bool read_full_message(const int sockfd, char *message, char *next_message);
+
+bool is_valid(message *msg);
+
+#endif /* MESSAGE_H_ */

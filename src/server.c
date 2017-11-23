@@ -11,6 +11,10 @@
 
 #include "reply.h"
 #include "server.h"
+#include "message.h"
+
+// keep track of number of connections not yet registerred
+int num_unregisterred = 0;
 
 struct sockaddr_in init_socket(int port) {
     struct sockaddr_in addr;
@@ -55,6 +59,17 @@ void handle_notice_msg(const message *msg, user *client) {
     }
 }
 
+void handle_whois_msg(const message *msg, user *client) {
+    user *target = get_user(msg->args[0], true);
+    if (target) {
+        send_rpl_whoisuser(client, target);
+        send_rpl_whoisserver(client, target->nick);
+        send_rpl_endofwhois(client, target->nick);
+    } else {
+        send_err_nosuchnick(client, msg->args[0]);
+    }
+}
+
 void handle_ping_msg(user *client) {
     send_pong(client);
 }
@@ -83,6 +98,15 @@ void handle_motd_msg(user *client) {
     }
 }
 
+void handle_lusers_msg(user *client) {
+    int num_registered = get_num_users();
+    send_rpl_luserclient(client, num_registered);
+    send_rpl_luserop(client);
+    send_rpl_luserunknown(client, num_unregisterred);
+    send_rpl_luserchannels(client);
+    send_rpl_luserme(client, num_unregisterred + num_registered);
+}
+
 void handle_msg(const message *msg, user *client) {
     if (strcmp(msg->cmd, "NICK") == 0) {
         handle_nick_msg(msg, client);
@@ -94,11 +118,15 @@ void handle_msg(const message *msg, user *client) {
         handle_privmsg_msg(msg, client);
     } else if (strcmp(msg->cmd, "NOTICE") == 0) {
         handle_notice_msg(msg, client);
+    } else if (strcmp(msg->cmd, "WHOIS") == 0) {
+        handle_whois_msg(msg, client);
     } else if (strcmp(msg->cmd, "PING") == 0) {
         handle_ping_msg(client);
     } else if (strcmp(msg->cmd, "PONG") == 0) {
     } else if (strcmp(msg->cmd, "MOTD") == 0) {
         handle_motd_msg(client);
+    } else if (strcmp(msg->cmd, "LUSERS") == 0) {
+        handle_lusers_msg(client);
     } else {
         chilog(WARNING, "Received unknown command %s", msg->cmd);
         send_err_unknowncommand(client, msg->cmd);
@@ -139,7 +167,15 @@ void handle_registration(const message *msg, user *client) {
     if (is_user_complete(client)) {
         if (register_user(client)) {
             client->is_registered = true;
-            send_registration_response(client);
+            num_unregisterred--;
+
+            send_rpl_welcome(client);
+            send_rpl_yourhost(client);
+            send_rpl_created(client);
+            send_rpl_myinfo(client);
+
+            handle_lusers_msg(client);
+            handle_motd_msg(client);
         } else {
             send_err_nicknameinuse(client, "*", client->nick);
         }
@@ -151,8 +187,10 @@ void *handle_client(void *args) {
     int clientsock = client->clientsock;
     int client_addr_len = client->client_addr_len;
     struct sockaddr_in *clientaddr = client->clientaddr;
+    num_unregisterred++;
 
-    char in_buffer[512], next_message[512];
+    // TODO: handle larger messages more gracefully
+    char in_buffer[4096], next_message[4096];
     char client_hostname[100];
     memset(in_buffer, '\0', sizeof(in_buffer));
     memset(next_message, '\0', sizeof(next_message));
@@ -172,6 +210,10 @@ void *handle_client(void *args) {
         parse_message(in_buffer, msg);
         log_message(msg);
  
+        if (!is_valid(msg)) {
+            continue;
+        }
+
         if (client->is_registered) {
             handle_msg(msg, client);
         } else {

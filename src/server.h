@@ -8,15 +8,18 @@ void handle_user_msg(const message *msg, user *client);
 void handle_nick_msg(const message *msg, user *client);
 void handle_privmsg_msg(const message *msg, user *client);
 void handle_notice_msg(const message *msg, user *client);
+void handle_whois_msg(const message *msg, user *client);
 
 void handle_pong_msg(user *client);
 void handle_motd_msg(user *client);
+void handle_lusers_msg(user *client);
 
-// Handle message for a registered user
+// Handle message for a registered user 
 void handle_msg(const message *msg, user *client);
 
 // Handles NICK and USER messages and ignores everything else. When the user
-// finally has valid information, this function registeres the new user
+// finally has valid information, this function registers the new user by calling
+// handle_registration()
 void handle_registration(const message *msg, user *client);
 
 /* entrypoint function for handling a new client

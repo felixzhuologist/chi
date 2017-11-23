@@ -38,4 +38,6 @@ void delete_user(user *client);
 
 bool update_nick(const char* new_nick, user *client);
 
+int get_num_users();
+
 #endif /* USER_H_ */
