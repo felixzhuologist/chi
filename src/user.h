@@ -3,8 +3,11 @@
 
 #include <stdbool.h>
 #include <sys/socket.h>
+#include <pthread.h>
 
 #define MAX_USERS 100
+
+pthread_rwlock_t users_lock;
 
 typedef struct user {
     int clientsock;

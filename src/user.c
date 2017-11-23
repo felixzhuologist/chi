@@ -41,27 +41,33 @@ bool is_user_complete(const user *client) {
 }
 
 user *get_user(const char *nick, const bool grab_lock) {
-    // grab lock
+    if (grab_lock){
+        pthread_rwlock_rdlock(&users_lock);
+    }
     for (int i = 0; i < MAX_USERS; i++) {
         if (USERS[i] && USERS[i]->nick && strcmp(USERS[i]->nick, nick) == 0) {
-            // release lock
+            if (grab_lock) {
+                pthread_rwlock_unlock(&users_lock);
+            }
             return USERS[i];
         }
     }
-    // release lock
+    if (grab_lock) {
+        pthread_rwlock_unlock(&users_lock);
+    }
     return NULL;
 }
 
 bool register_user(user *client) {
-    // grab lock
+    pthread_rwlock_wrlock(&users_lock);
     if (get_user(client->nick, false)) {
-        // release lock
+        pthread_rwlock_unlock(&users_lock);
         return false;
     }
     for (int i = 0; i < MAX_USERS; i++) {
         if (USERS[i] == NULL) {
             USERS[i] = client;
-            // release lock
+            pthread_rwlock_unlock(&users_lock);
             return true;
         }
     }
@@ -69,19 +75,21 @@ bool register_user(user *client) {
 }
 
 void delete_user(user *client) {
-    // grab lock
+    pthread_rwlock_wrlock(&users_lock);
     for (int i = 0; i < MAX_USERS; i++) {
         if (USERS[i] == client) {
             free_user(client);
             USERS[i] = NULL;
+            break;
         }
     }
+    pthread_rwlock_unlock(&users_lock);
 }
 
 bool update_nick(const char *new_nick, user *client) {
-    // grab lock
+    pthread_rwlock_wrlock(&users_lock);
     if (get_user(client->nick, false)) {
-        // release lock
+        pthread_rwlock_unlock(&users_lock);
         return false;
     }
     if (client->nick != NULL) {
@@ -89,17 +97,18 @@ bool update_nick(const char *new_nick, user *client) {
     }
     client->nick = malloc(strlen(new_nick));
     strcpy(client->nick, new_nick);
-    // release lock
+    pthread_rwlock_unlock(&users_lock);
     return true;
 }
 
 int get_num_users() {
     int num_users = 0;
-    // lock
+    pthread_rwlock_rdlock(&users_lock);
     for (int i = 0; i < MAX_USERS; i++) {
         if (USERS[i] != NULL) {
             num_users++;
         }
     }
+    pthread_rwlock_unlock(&users_lock);
     return num_users;
 }

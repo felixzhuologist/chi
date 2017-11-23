@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "log.h"
 #include "server.h"
@@ -68,6 +69,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* Your code goes here */
+    pthread_rwlock_init(&users_lock, NULL);
     run_server(atoi(port));
     return 0;
 }
