@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+#include "channel.h"
 #include "reply.h"
 #include "server.h"
 #include "message.h"
