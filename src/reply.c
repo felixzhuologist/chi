@@ -223,3 +223,22 @@ void send_pong(user *client) {
   sprintf(reply, "PONG %s", server_name);
   send_reply(client, reply);
 }
+
+// TODO: refactor and use all args (not just first)
+void send_archived_msg(user *client, archived_msg *msg) {
+  char reply[513];
+  int msg_size = snprintf(reply, 513, ":%s!%s@%s %s %s\r\n",
+    msg->sender->nick, msg->sender->username, msg->sender->hostname, msg->msg->cmd, msg->msg->args[0]);
+  if (msg_size > 513) {
+    chilog(ERROR, "sending clipped privmsg longer than 512 chars");
+    reply[510] = '\r';
+    reply[511] = '\n';
+  }
+
+  int sent_size = send(client->clientsock, reply, strlen(reply), 0);
+  if (sent_size == -1) {
+    chilog(ERROR, "could not send a reply, send() returned -1");
+  } else if (sent_size < msg_size) { // TODO: send entire message
+    chilog(ERROR, "reply was fragmented");
+  }
+}

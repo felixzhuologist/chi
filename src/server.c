@@ -73,6 +73,11 @@ void handle_whois_msg(const message *msg, user *client) {
 
 void handle_join_msg(const message *msg, user *client) {
     char *channel = msg->args[0];
+
+    archived_msg *archived = malloc(sizeof(archived_msg));
+    archived->msg = msg;
+    archived->sender = client;
+    send_archived_msg(client, archived);
     // TODO: replace when implementing NAMES msg
     send_rpl_namreply(client, channel);
     send_rpl_endofnames(client, channel);

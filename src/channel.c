@@ -13,6 +13,7 @@ void init_channel(char *name, channel *new_channel) {
   }
   strncpy(new_channel->name, name, 50);
   new_channel->members = {NULL};
+  new_channel->msgs = {NULL};
 }
 
 void add_channel(channel *new_channel) {

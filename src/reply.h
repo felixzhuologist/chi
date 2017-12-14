@@ -71,6 +71,7 @@
 #define ERR_USERSDONTMATCH		"502"
 
 #include "user.h"
+#include "channel.h"
 
 // utility function that prepends the server's hostname to the reply and
 // then sends it across the client's socket. Assumes that reply is null terminated
@@ -105,5 +106,6 @@ void send_quit_response(user *client, char *message);
 // send message from client to recipient. message_type should be one of PRIVMSG, NOTICE
 void send_privmsg(user *client, user *recipient, char *message, char *message_type);
 void send_pong(user *client);
+void send_archived_msg(user *client, archived_msg *msg);
 
 #endif /* REPLY_H_ */
