@@ -92,6 +92,8 @@ void send_rpl_luserme(user *client, int num_clients);
 void send_rpl_whoisuser(user *client, user *target);
 void send_rpl_whoisserver(user *client, char *target_nick);
 void send_rpl_endofwhois(user *client, char *target_nick);
+void send_rpl_namreply(user *client, char *channel);
+void send_rpl_endofnames(user *client, char *channel);
 
 void send_err_nicknameinuse(user *client, char *old_nick, char *new_nick);
 void send_err_alreadyregistred(user *client);

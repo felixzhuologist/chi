@@ -9,6 +9,7 @@ void handle_nick_msg(const message *msg, user *client);
 void handle_privmsg_msg(const message *msg, user *client);
 void handle_notice_msg(const message *msg, user *client);
 void handle_whois_msg(const message *msg, user *client);
+void handle_join_msg(const message *msg, user *client);
 
 void handle_pong_msg(user *client);
 void handle_motd_msg(user *client);

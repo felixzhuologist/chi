@@ -158,6 +158,20 @@ void send_rpl_endofwhois(user *client, char *target_nick) {
   send_reply(client, reply);
 }
 
+void send_rpl_namreply(user *client, char *channel) {
+  char reply[512];
+  sprintf(reply, "%s %s = %s :name1 name2",
+    RPL_NAMREPLY, client->nick, channel);
+  send_reply(client, reply);
+}
+
+void send_rpl_endofnames(user *client, char *channel) {
+  char reply[512];
+  sprintf(reply, "%s %s %s :End of NAMES list",
+    RPL_ENDOFNAMES, client->nick, channel);
+  send_reply(client, reply);
+}
+
 void send_err_nomotd(user *client) {
   char reply[512];
   sprintf(reply, "%s %s :MOTD File is missing",

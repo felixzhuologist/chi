@@ -71,6 +71,13 @@ void handle_whois_msg(const message *msg, user *client) {
     }
 }
 
+void handle_join_msg(const message *msg, user *client) {
+    char *channel = msg->args[0];
+    // TODO: replace when implementing NAMES msg
+    send_rpl_namreply(client, channel);
+    send_rpl_endofnames(client, channel);
+}
+
 void handle_ping_msg(user *client) {
     send_pong(client);
 }
@@ -121,6 +128,8 @@ void handle_msg(const message *msg, user *client) {
         handle_notice_msg(msg, client);
     } else if (strcmp(msg->cmd, "WHOIS") == 0) {
         handle_whois_msg(msg, client);
+    } else if (strcmp(msg->cmd, "JOIN") == 0) {
+        handle_join_msg(msg, client);
     } else if (strcmp(msg->cmd, "PING") == 0) {
         handle_ping_msg(client);
     } else if (strcmp(msg->cmd, "PONG") == 0) {
