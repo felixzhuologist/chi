@@ -12,7 +12,6 @@
 #include "channel.h"
 #include "reply.h"
 #include "server.h"
-#include "message.h"
 
 // keep track of number of connections not yet registerred
 int num_unregisterred = 0;
@@ -72,15 +71,29 @@ void handle_whois_msg(const message *msg, user *client) {
 }
 
 void handle_join_msg(const message *msg, user *client) {
-    char *channel = msg->args[0];
+    char *channel_name = msg->args[0];
+    channel *channel = get_channel(channel_name);
+    if (channel == NULL) {
+       channel = malloc(sizeof(channel));
+       init_channel(channel_name, channel);
+       add_channel(channel); 
+    }
 
     archived_msg *archived = malloc(sizeof(archived_msg));
     archived->msg = msg;
     archived->sender = client;
-    send_archived_msg(client, archived);
+    add_msg(archived, channel);
+    // send_archived_msg(client, archived);
+
+    for (int i = 0; i < MAX_SAVED_MSGS; i++) {
+        if (channel->msgs[i] == NULL) {
+            break;
+        }
+        send_archived_msg(client, channel->msgs[i]);
+    }
     // TODO: replace when implementing NAMES msg
-    send_rpl_namreply(client, channel);
-    send_rpl_endofnames(client, channel);
+    send_rpl_namreply(client, channel_name);
+    send_rpl_endofnames(client, channel_name);
 }
 
 void handle_ping_msg(user *client) {
