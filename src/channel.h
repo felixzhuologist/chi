@@ -27,10 +27,12 @@ typedef struct channel {
 
 void init_channel(char *name, channel *new_channel);
 
+channel *get_channel(const char *name);
 void add_channel(channel *new_channel);
 
 void add_msg(archived_msg *msg, channel *channel);
 
-channel *get_channel(const char *name);
+bool is_member(const user *user, const channel *channel);
+void add_member(user *member, channel *channel);
 
 #endif /* CHANNEL_H_ */

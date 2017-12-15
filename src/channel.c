@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -19,8 +20,17 @@ void init_channel(char *name, channel *new_channel) {
   chilog(INFO, "Creating new channel %s", new_channel->name);
 }
 
+channel *get_channel(const char *name) {
+  for (int i = 0; i < MAX_CHANNELS; i++) {
+    if (CHANNELS[i] && (strcmp(CHANNELS[i]->name, name) == 0)) {
+      return CHANNELS[i];
+    }
+  }
+  return NULL;
+}
+
 void add_channel(channel *new_channel) {
-  for (int i = 0; i < MAX_CHANNEL_MEMBERS; i++) {
+  for (int i = 0; i < MAX_CHANNELS; i++) {
     if (CHANNELS[i] == NULL) {
       CHANNELS[i] = new_channel;
       return;
@@ -33,16 +43,27 @@ void add_msg(archived_msg *msg, channel *channel) {
   for (int i = 0; i < MAX_SAVED_MSGS; i++) {
     if (channel->msgs[i] == NULL) {
       channel->msgs[i] = msg;
-      break;
+      return;
     }
   }
+  perror("Ran out of room for storing messages");
 }
 
-channel *get_channel(const char *name) {
+bool is_member(const user *user, const channel *channel) {
   for (int i = 0; i < MAX_CHANNEL_MEMBERS; i++) {
-    if (CHANNELS[i] && (strcmp(CHANNELS[i]->name, name) == 0)) {
-      return CHANNELS[i];
+    if (channel->members[i] && (strcmp(channel->members[i]->nick, user->nick) == 0)) {
+      return true;
     }
   }
-  return NULL;
+  return false;
+}
+
+void add_member(user *member, channel *channel) {
+  for (int i = 0; i < MAX_CHANNEL_MEMBERS; i++) {
+    if (channel->members[i] == NULL) {
+      channel->members[i] = member;
+      return;
+    }
+  }
+  perror("Ran out of room for adding users to channel");
 }

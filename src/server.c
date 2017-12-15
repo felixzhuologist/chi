@@ -73,11 +73,17 @@ void handle_whois_msg(const message *msg, user *client) {
 void handle_join_msg(const message *msg, user *client) {
     char *channel_name = msg->args[0];
     channel *channel = get_channel(channel_name);
-    if (channel == NULL) {
-       channel = malloc(sizeof(channel));
-       init_channel(channel_name, channel);
-       add_channel(channel); 
+    if (channel != NULL) {
+        return;
+    } 
+    channel = malloc(sizeof(channel));
+    init_channel(channel_name, channel);
+    add_channel(channel); 
+
+    if (is_member(client, channel)) {
+        return;
     }
+    add_member(client, channel);
 
     archived_msg *archived = malloc(sizeof(archived_msg));
     archived->msg = msg;
@@ -91,6 +97,7 @@ void handle_join_msg(const message *msg, user *client) {
         }
         send_archived_msg(client, channel->msgs[i]);
     }
+
     // TODO: replace when implementing NAMES msg
     send_rpl_namreply(client, channel_name);
     send_rpl_endofnames(client, channel_name);
