@@ -47,7 +47,7 @@
 
 
 /* Logging level. Set by default to print just errors */
-static int loglevel = ERROR;
+static int loglevel = INFO;
 
 
 void chilog_setloglevel(loglevel_t level)
@@ -99,6 +99,14 @@ void __chilog(loglevel_t level, char *file, int line, char *fmt, ...)
     funlockfile(stdout);
     va_end(argptr);
     fflush(stdout);
+
+    FILE *f = fopen("/tmp/chilog.log", "w");
+    fprintf(f, " %6s %-30s ", levelstr, buf);
+    va_start(argptr, fmt);
+    vfprintf(f, fmt, argptr);
+    fprintf(f, "\n");
+    va_end(argptr);
+    fflush(f);
 }
 
 
