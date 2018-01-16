@@ -44,6 +44,7 @@
 
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -79,8 +80,41 @@
  */
 int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
 {
-    /* Your code goes here */
+    FILE *f = fopen(filename, "r");
+    if (f) {
+        // TODO: use functions from pager.c to manage Pager?
+        unsigned char buffer[100];
+        int num_read;
+        if ((num_read = fread(buffer, 1, 100, f)) < 100) {
+            return CHIDB_ECORRUPTHEADER;
+        }
+        fseek(f, 0, SEEK_END);
+        long file_size = ftell(f);
+        uint16_t page_size;
+        uint32_t file_change_counter, schema_version, page_cache_size, user_cookie;
+        memcpy(&page_size, buffer + 10, 2);
+        memcpy(&file_change_counter, buffer + 18, 4);
+        memcpy(&schema_version, buffer + 40, 4);
+        memcpy(&page_cache_size, buffer + 48, 4);
+        memcpy(&user_cookie, buffer + 60, 4);
 
+        // TODO: verify page header values?
+
+        Pager *pager = malloc(sizeof(Pager));
+        pager->f = f;
+        pager->page_size = page_size;
+        pager->n_pages = (npage_t) file_size / page_size;
+        chilog(INFO, "%d %d\n", page_size, file_size);
+
+        *bt = malloc(sizeof(BTree));
+        (*bt)->pager = pager;
+        (*bt)->db = db;
+
+        db->bt = *bt;
+        fclose(f);
+    } else {
+
+    }
     return CHIDB_OK;
 }
 
