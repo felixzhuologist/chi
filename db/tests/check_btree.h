@@ -6,8 +6,8 @@
 
 #define TESTFILE_STRINGS1 ("strings-1btree.sdb") // String database w/ five pages, single B-Tree
 #define TESTFILE_STRINGS2 ("strings-2btree.sdb") // String database w/ seven pages, two B-Trees in 1, 5
-#define TESTFILE_CORRUPT1 ("corruptheader-1.cdb") // Corrupt header
-#define TESTFILE_CORRUPT2 ("corruptheader-2.cdb") // Corrupt header, in devious ways
+#define TESTFILE_CORRUPT1 ("corruptheader-1.cdb") // Corrupt header (incorrect header string)
+#define TESTFILE_CORRUPT2 ("corruptheader-2.cdb") // Corrupt header (bad default page cache size)
 #define TESTFILE_CORRUPT3 ("corruptheader-3.cdb") // Corrupt header, in even more devious ways
 
 extern chidb_key_t file1_keys[];

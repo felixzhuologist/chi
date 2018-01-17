@@ -83,28 +83,40 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
     FILE *f = fopen(filename, "r");
     if (f) {
         // TODO: use functions from pager.c to manage Pager?
-        unsigned char buffer[100];
+        uint8_t buffer[100];
         int num_read;
         if ((num_read = fread(buffer, 1, 100, f)) < 100) {
             return CHIDB_ECORRUPTHEADER;
         }
+
+        char *expected = "SQLite format 3";
+        if (strncmp((char *)buffer, expected, strlen(expected))) {
+            return CHIDB_ECORRUPTHEADER;
+        }
+
         fseek(f, 0, SEEK_END);
-        long file_size = ftell(f);
+        long file_size = ftell(f) - 1;
         uint16_t page_size;
         uint32_t file_change_counter, schema_version, page_cache_size, user_cookie;
-        memcpy(&page_size, buffer + 10, 2);
-        memcpy(&file_change_counter, buffer + 18, 4);
+        memcpy(&page_size, buffer + 16, 2);
+        memcpy(&file_change_counter, buffer + 24, 4);
         memcpy(&schema_version, buffer + 40, 4);
         memcpy(&page_cache_size, buffer + 48, 4);
         memcpy(&user_cookie, buffer + 60, 4);
+        page_size = ntohs(page_size);
+        file_change_counter = ntohl(file_change_counter);
+        schema_version = ntohl(schema_version);
+        page_cache_size = ntohl(page_cache_size);
+        user_cookie = ntohl(user_cookie);
 
-        // TODO: verify page header values?
+        if (file_change_counter || schema_version || user_cookie || page_cache_size != 20000) {
+            return CHIDB_ECORRUPTHEADER;
+        }
 
         Pager *pager = malloc(sizeof(Pager));
         pager->f = f;
         pager->page_size = page_size;
         pager->n_pages = (npage_t) file_size / page_size;
-        chilog(INFO, "%d %d\n", page_size, file_size);
 
         *bt = malloc(sizeof(BTree));
         (*bt)->pager = pager;

@@ -100,13 +100,14 @@ void __chilog(loglevel_t level, char *file, int line, char *fmt, ...)
     va_end(argptr);
     fflush(stdout);
 
-    FILE *f = fopen("/tmp/chilog.log", "w");
+    FILE *f = fopen("/tmp/chilog.log", "a");
     fprintf(f, " %6s %-30s ", levelstr, buf);
     va_start(argptr, fmt);
     vfprintf(f, fmt, argptr);
     fprintf(f, "\n");
     va_end(argptr);
     fflush(f);
+    fclose(f);
 }
 
 
