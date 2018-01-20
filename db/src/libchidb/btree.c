@@ -55,6 +55,10 @@
 #include "pager.h"
 #include "util.h"
 
+#define READ_UINT8(var, buffer, offset) uint8_t var; memcpy(&var, buffer + offset, 1);
+#define READ_UINT16(var, buffer, offset) uint16_t var; memcpy(&var, buffer + offset, 2); var = ntohs(var);
+#define READ_UINT32(var, buffer, offset) uint32_t var; memcpy(&var, buffer + offset, 4); var = ntohl(var);
+
 
 /* Open a B-Tree file
  *
@@ -96,18 +100,12 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
 
         fseek(f, 0, SEEK_END);
         long file_size = ftell(f) - 1;
-        uint16_t page_size;
-        uint32_t file_change_counter, schema_version, page_cache_size, user_cookie;
-        memcpy(&page_size, buffer + 16, 2);
-        memcpy(&file_change_counter, buffer + 24, 4);
-        memcpy(&schema_version, buffer + 40, 4);
-        memcpy(&page_cache_size, buffer + 48, 4);
-        memcpy(&user_cookie, buffer + 60, 4);
-        page_size = ntohs(page_size);
-        file_change_counter = ntohl(file_change_counter);
-        schema_version = ntohl(schema_version);
-        page_cache_size = ntohl(page_cache_size);
-        user_cookie = ntohl(user_cookie);
+
+        READ_UINT16(page_size, buffer, 16)
+        READ_UINT32(file_change_counter, buffer, 24)
+        READ_UINT32(schema_version, buffer, 40)
+        READ_UINT32(page_cache_size, buffer, 48)
+        READ_UINT32(user_cookie, buffer, 60)
 
         if (file_change_counter || schema_version || user_cookie || page_cache_size != 20000) {
             return CHIDB_ECORRUPTHEADER;
@@ -123,7 +121,7 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
         (*bt)->db = db;
 
         db->bt = *bt;
-        fclose(f);
+        // fclose(f);
     } else {
 
     }
@@ -145,9 +143,7 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
  */
 int chidb_Btree_close(BTree *bt)
 {
-    /* Your code goes here */
-
-    return CHIDB_OK;
+    return chidb_Pager_close(bt->pager);;
 }
 
 
@@ -174,7 +170,6 @@ int chidb_Btree_close(BTree *bt)
  */
 int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
 {
-    /* Your code goes here */
 
     return CHIDB_OK;
 }
