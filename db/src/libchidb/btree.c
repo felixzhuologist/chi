@@ -101,11 +101,11 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
         fseek(f, 0, SEEK_END);
         long file_size = ftell(f) - 1;
 
-        READ_UINT16(page_size, buffer, 16)
+        READ_UINT16(page_size,           buffer, 16)
         READ_UINT32(file_change_counter, buffer, 24)
-        READ_UINT32(schema_version, buffer, 40)
-        READ_UINT32(page_cache_size, buffer, 48)
-        READ_UINT32(user_cookie, buffer, 60)
+        READ_UINT32(schema_version,      buffer, 40)
+        READ_UINT32(page_cache_size,     buffer, 48)
+        READ_UINT32(user_cookie,         buffer, 60)
 
         if (file_change_counter || schema_version || user_cookie || page_cache_size != 20000) {
             return CHIDB_ECORRUPTHEADER;
@@ -143,7 +143,10 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
  */
 int chidb_Btree_close(BTree *bt)
 {
-    return chidb_Pager_close(bt->pager);;
+    // chidb_close(bt->db);
+    chidb_Pager_close(bt->pager);;
+    free(bt);
+    return CHIDB_OK;
 }
 
 
@@ -170,6 +173,37 @@ int chidb_Btree_close(BTree *bt)
  */
 int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
 {
+    if (npage < 1 || npage > bt->pager->n_pages) {
+        return CHIDB_EPAGENO;
+    }
+
+    MemPage *page;
+    int result;
+    if ((result = chidb_Pager_readPage(bt->pager, npage, &page)) != CHIDB_OK) {
+        return result;
+    }
+
+    *btn = malloc(sizeof(BTreeNode));
+    // the first page's page header starts at byte 100 because of the file header
+    int header_offset = npage == 1 ? 100 : 0;
+    READ_UINT8(type,          page->data, header_offset + PGHEADER_PGTYPE_OFFSET)
+    READ_UINT16(free_offset,  page->data, header_offset + PGHEADER_FREE_OFFSET)
+    READ_UINT16(n_cells,      page->data, header_offset + PGHEADER_NCELLS_OFFSET)
+    READ_UINT16(cells_offset, page->data, header_offset + PGHEADER_CELL_OFFSET)
+    READ_UINT32(right_page,   page->data, header_offset + PGHEADER_RIGHTPG_OFFSET)
+    (*btn)->page = page;
+    (*btn)->type = type;
+    (*btn)->free_offset = free_offset;
+    (*btn)->n_cells = (ncell_t)n_cells;
+    (*btn)->cells_offset = cells_offset;
+
+    if (type == PGTYPE_TABLE_INTERNAL || type == PGTYPE_INDEX_INTERNAL) {
+        (*btn)->right_page = (npage_t)right_page;
+        (*btn)->celloffset_array = page->data + header_offset + INTPG_CELLSOFFSET_OFFSET; 
+    } else { // leaf page
+        (*btn)->right_page = 0; // leaves have no right pointers
+        (*btn)->celloffset_array = page->data + header_offset + LEAFPG_CELLSOFFSET_OFFSET;
+    }
 
     return CHIDB_OK;
 }
@@ -190,7 +224,11 @@ int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
  */
 int chidb_Btree_freeMemNode(BTree *bt, BTreeNode *btn)
 {
-    /* Your code goes here */
+    int result;
+    if ((result = chidb_Pager_releaseMemPage(bt->pager, btn->page)) != CHIDB_OK) {
+        return result;
+    }
+    free(btn);
 
     return CHIDB_OK;
 }
