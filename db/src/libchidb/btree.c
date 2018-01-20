@@ -42,7 +42,7 @@
  *
  */
 
-
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -59,6 +59,24 @@
 #define READ_UINT16(var, buffer, offset) uint16_t var; memcpy(&var, buffer + offset, 2); var = ntohs(var);
 #define READ_UINT32(var, buffer, offset) uint32_t var; memcpy(&var, buffer + offset, 4); var = ntohl(var);
 
+#define WRITE_UINT8(val, buffer, offset) buffer[offset] = (uint8_t)val;
+#define WRITE_UINT16(val, buffer, offset) {int temp = (uint16_t)htons(val); memcpy(buffer + offset, &temp, 2);}
+#define WRITE_UINT32(val, buffer, offset) {int temp = (uint32_t)htonl(val); memcpy(buffer + offset, &temp, 4);}
+
+// Return a new empty BTreeNode
+BTreeNode chidb_Btree_createNode(BTree *bt, npage_t npage, uint8_t type) {
+    MemPage page = chidb_Pager_initMemPage(npage, bt->pager->page_size);
+    bool is_leaf = type == PGTYPE_TABLE_LEAF || type ==  PGTYPE_INDEX_LEAF;
+    uint16_t free_offset = is_leaf ? LEAFPG_CELLSOFFSET_OFFSET : INTPG_CELLSOFFSET_OFFSET;
+    BTreeNode new_node = {
+        .page=&page,
+        .type=type,
+        .free_offset=free_offset,
+        .n_cells=0,
+        .cells_offset=bt->pager->page_size,
+    };
+    return new_node;
+}
 
 /* Open a B-Tree file
  *
@@ -234,6 +252,30 @@ int chidb_Btree_freeMemNode(BTree *bt, BTreeNode *btn)
 }
 
 
+
+/* Syncs the values of a BTNode with its in-memory page
+ *
+ * Since the cell offset array and the cells themselves are modified directly on the
+ * page, the values we need to update are "type", "free_offset", "n_cells",
+ * "cells_offset" and "right_page".
+ *
+ * Parameters
+ * - btn: the BTreeNode to sync
+ */
+void chidb_Btree_syncNode(BTreeNode *btn)
+{
+    int header_offset = btn->page->npage == 1 ? 100 : 0;
+    chilog(INFO, "%d %d %d", btn->type, btn->page->data[header_offset + PGHEADER_PGTYPE_OFFSET], PGTYPE_INDEX_INTERNAL);
+    WRITE_UINT8(btn->type,          btn->page->data, header_offset + PGHEADER_PGTYPE_OFFSET)
+    WRITE_UINT16(btn->free_offset,  btn->page->data, header_offset + PGHEADER_FREE_OFFSET)
+    WRITE_UINT16(btn->n_cells,      btn->page->data, header_offset + PGHEADER_NCELLS_OFFSET)
+    WRITE_UINT16(btn->cells_offset, btn->page->data, header_offset + PGHEADER_CELL_OFFSET)
+    if (btn->type == PGTYPE_TABLE_INTERNAL || btn->type == PGTYPE_INDEX_INTERNAL) {
+        WRITE_UINT32(btn->right_page,   btn->page->data, header_offset + PGHEADER_RIGHTPG_OFFSET)
+    }
+    chilog(INFO, "%d %d", btn->page->data[header_offset + PGHEADER_PGTYPE_OFFSET], PGTYPE_INDEX_INTERNAL);
+}
+
 /* Create a new B-Tree node
  *
  * Allocates a new page in the file and initializes it as a B-Tree node.
@@ -252,9 +294,11 @@ int chidb_Btree_freeMemNode(BTree *bt, BTreeNode *btn)
  */
 int chidb_Btree_newNode(BTree *bt, npage_t *npage, uint8_t type)
 {
-    /* Your code goes here */
+    chidb_Pager_allocatePage(bt->pager, npage);
 
-    return CHIDB_OK;
+    BTreeNode new_node = chidb_Btree_createNode(bt, *npage, type);
+    chidb_Btree_syncNode(&new_node);
+    return chidb_Pager_writePage(bt->pager, new_node.page);
 }
 
 
@@ -277,21 +321,14 @@ int chidb_Btree_newNode(BTree *bt, npage_t *npage, uint8_t type)
  */
 int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
 {
-    /* Your code goes here */
-
-    return CHIDB_OK;
+    BTreeNode node = chidb_Btree_createNode(bt, npage, type);
+    chidb_Btree_syncNode(&node);
+    return chidb_Pager_writePage(bt->pager, node.page);
 }
 
 
 
 /* Write an in-memory B-Tree node to disk
- *
- * Writes an in-memory B-Tree node to disk. To do this, we need to update
- * the in-memory page according to the chidb page format. Since the cell
- * offset array and the cells themselves are modified directly on the
- * page, the only thing to do is to store the values of "type",
- * "free_offset", "n_cells", "cells_offset" and "right_page" in the
- * in-memory page.
  *
  * Parameters
  * - bt: B-Tree file
@@ -303,9 +340,10 @@ int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
  */
 int chidb_Btree_writeNode(BTree *bt, BTreeNode *btn)
 {
-    /* Your code goes here */
-
-    return CHIDB_OK;
+    chilog(INFO, "%d %d %d", btn->type, btn->page->data[100 + PGHEADER_PGTYPE_OFFSET], PGTYPE_INDEX_INTERNAL);
+    chidb_Btree_syncNode(btn);
+    chilog(INFO, "%d %d", btn->page->data[100 + PGHEADER_PGTYPE_OFFSET], PGTYPE_INDEX_INTERNAL);
+    return chidb_Pager_writePage(bt->pager, btn->page);
 }
 
 

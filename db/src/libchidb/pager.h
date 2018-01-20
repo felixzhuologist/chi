@@ -68,4 +68,6 @@ int chidb_Pager_writePage(Pager *pager, MemPage *page);
 int chidb_Pager_getRealDBSize(Pager *pager, npage_t *npages);
 int chidb_Pager_close(Pager *pager);
 
+MemPage chidb_Pager_initMemPage(npage_t page_num, uint16_t pagesize);
+
 #endif /*PAGER_H_*/

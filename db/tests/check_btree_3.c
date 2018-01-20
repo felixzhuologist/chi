@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <check.h>
+#include <chidb/log.h>
 #include "check_btree.h"
 
 

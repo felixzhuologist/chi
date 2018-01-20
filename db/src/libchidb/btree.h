@@ -148,6 +148,7 @@ struct BTreeCell
     } fields;
 };
 
+BTreeNode chidb_Btree_createNode(BTree *bt, npage_t npage, uint8_t type);
 
 int chidb_Btree_open(const char *filename, chidb *db, BTree **bt);
 int chidb_Btree_close(BTree *bt);
@@ -155,6 +156,7 @@ int chidb_Btree_close(BTree *bt);
 int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **node);
 int chidb_Btree_freeMemNode(BTree *bt, BTreeNode *btn);
 
+void chidb_Btree_syncNode(BTreeNode *btn);
 int chidb_Btree_newNode(BTree *bt, npage_t *npage, uint8_t type);
 int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type);
 int chidb_Btree_writeNode(BTree *bt, BTreeNode *node);

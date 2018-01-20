@@ -289,3 +289,10 @@ int chidb_Pager_close(Pager *pager)
 
     return CHIDB_OK;
 }
+
+// Return a new, empty MemPage
+MemPage chidb_Pager_initMemPage(npage_t page_num, uint16_t pagesize) {
+    MemPage new_page = {.npage=page_num};
+    new_page.data = calloc(pagesize, 1);
+    return new_page;
+}
