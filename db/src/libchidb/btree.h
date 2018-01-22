@@ -138,12 +138,12 @@ struct BTreeCell
         } tableLeaf;
         struct
         {
-            chidb_key_t keyPk;         /* Primary key of row where the indexed field is equal to key */
+            chidb_key_t keyPk;   /* Primary key of row where the indexed field is equal to key */
             npage_t child_page;  /* Child page with keys < key */
         } indexInternal;
         struct
         {
-            chidb_key_t keyPk;         /* Primary key of row where the indexed field is equal to key */
+            chidb_key_t keyPk;   /* Primary key of row where the indexed field is equal to key */
         } indexLeaf;
     } fields;
 };

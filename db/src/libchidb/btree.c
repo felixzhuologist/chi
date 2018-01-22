@@ -359,7 +359,34 @@ int chidb_Btree_writeNode(BTree *bt, BTreeNode *btn)
  */
 int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 {
-    /* Your code goes here */
+    if (ncell <= 0 || ncell > btn->n_cells) {
+        return CHIDB_ECELLNO;
+    }
+
+    READ_UINT16(cell_offset, btn->celloffset_array, ncell * 2);
+    uint8_t *cell_data = btn->page->data + cell_offset;
+    READ_UINT32(key, cell_data, 4);
+
+    cell->type = btn->type;
+    // TODO: convert key (varint32) to a uin32_t
+    cell->key = (chidb_key_t)key;
+
+    if (cell->type == PGTYPE_TABLE_INTERNAL) {
+        READ_UINT32(child_page, cell_data, 0)
+        (cell->fields).tableInternal.child_page = child_page;
+    }
+
+    // switch(cell->type)
+    // {
+    // case PGTYPE_TABLE_INTERNAL:
+    //     break;
+    // case PGTYPE_INDEX_INTERNAL:
+    //     break;
+    // case PGTYPE_TABLE_LEAF:
+    //     break;
+    // case PGTYPE_INDEX_LEAF:
+    //     break;
+    // } 
 
     return CHIDB_OK;
 }
