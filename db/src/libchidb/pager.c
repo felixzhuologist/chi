@@ -226,6 +226,9 @@ int	chidb_Pager_writePage(Pager *pager, MemPage *page)
     int n;
     fseek(pager->f, (page->npage - 1) * pager->page_size, SEEK_SET);
     n = fwrite(page->data, 1, pager->page_size, pager->f);
+    if (n != pager->page_size) {
+        return CHIDB_EIO;
+    }
     chilog(TRACE, "Wrote %i bytes to page %i", n, page->npage);
     return CHIDB_OK;
 }

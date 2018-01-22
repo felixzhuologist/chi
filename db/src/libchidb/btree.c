@@ -102,7 +102,7 @@ BTreeNode chidb_Btree_createNode(BTree *bt, npage_t npage, uint8_t type) {
  */
 int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
 {
-    FILE *f = fopen(filename, "r");
+    FILE *f = fopen(filename, "r+");
     if (f) {
         // TODO: use functions from pager.c to manage Pager?
         uint8_t buffer[100];
@@ -191,10 +191,6 @@ int chidb_Btree_close(BTree *bt)
  */
 int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
 {
-    if (npage < 1 || npage > bt->pager->n_pages) {
-        return CHIDB_EPAGENO;
-    }
-
     MemPage *page;
     int result;
     if ((result = chidb_Pager_readPage(bt->pager, npage, &page)) != CHIDB_OK) {
@@ -265,7 +261,6 @@ int chidb_Btree_freeMemNode(BTree *bt, BTreeNode *btn)
 void chidb_Btree_syncNode(BTreeNode *btn)
 {
     int header_offset = btn->page->npage == 1 ? 100 : 0;
-    chilog(INFO, "%d %d %d", btn->type, btn->page->data[header_offset + PGHEADER_PGTYPE_OFFSET], PGTYPE_INDEX_INTERNAL);
     WRITE_UINT8(btn->type,          btn->page->data, header_offset + PGHEADER_PGTYPE_OFFSET)
     WRITE_UINT16(btn->free_offset,  btn->page->data, header_offset + PGHEADER_FREE_OFFSET)
     WRITE_UINT16(btn->n_cells,      btn->page->data, header_offset + PGHEADER_NCELLS_OFFSET)
@@ -273,7 +268,6 @@ void chidb_Btree_syncNode(BTreeNode *btn)
     if (btn->type == PGTYPE_TABLE_INTERNAL || btn->type == PGTYPE_INDEX_INTERNAL) {
         WRITE_UINT32(btn->right_page,   btn->page->data, header_offset + PGHEADER_RIGHTPG_OFFSET)
     }
-    chilog(INFO, "%d %d", btn->page->data[header_offset + PGHEADER_PGTYPE_OFFSET], PGTYPE_INDEX_INTERNAL);
 }
 
 /* Create a new B-Tree node
@@ -340,9 +334,7 @@ int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
  */
 int chidb_Btree_writeNode(BTree *bt, BTreeNode *btn)
 {
-    chilog(INFO, "%d %d %d", btn->type, btn->page->data[100 + PGHEADER_PGTYPE_OFFSET], PGTYPE_INDEX_INTERNAL);
     chidb_Btree_syncNode(btn);
-    chilog(INFO, "%d %d", btn->page->data[100 + PGHEADER_PGTYPE_OFFSET], PGTYPE_INDEX_INTERNAL);
     return chidb_Pager_writePage(bt->pager, btn->page);
 }
 
