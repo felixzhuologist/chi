@@ -368,25 +368,31 @@ int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
     READ_UINT32(key, cell_data, 4);
 
     cell->type = btn->type;
-    // TODO: convert key (varint32) to a uin32_t
-    cell->key = (chidb_key_t)key;
-
+    uint32_t varint_mask = ~((1 << 31) | (1 << 23) | (1 << 15) | (1 << 7));
+    cell->key = (chidb_key_t)(key & varint_mask);
+    // uint32_t bla = cell_data[0] |
+    //                (cell_data[1] & ~(1 << 7)) << 7 |
+    //                (cell_data[2] & ~(1 << 7)) << 14 |
+    //                (cell_data[3] & ~(1 << 7)) << 21;
+    // chilog(INFO, "%x %x %d %d %x", key, htonl(key), cell->key, ntohl(bla), bla);
     if (cell->type == PGTYPE_TABLE_INTERNAL) {
         READ_UINT32(child_page, cell_data, 0)
         (cell->fields).tableInternal.child_page = child_page;
+    } else if (cell->type == PGTYPE_INDEX_INTERNAL) {
+        READ_UINT32(child_page, cell_data, 0)
+        READ_UINT32(keyPk, cell_data, 12);
+        (cell->fields).indexInternal.child_page = child_page;
+        (cell->fields).indexInternal.keyPk = keyPk;
+    } else if (cell->type == PGTYPE_TABLE_LEAF) {
+        READ_UINT32(data_size, cell_data, 0)
+        (cell->fields).tableLeaf.data_size = data_size & varint_mask;
+        (cell->fields).tableLeaf.data = cell_data + 8;
+    } else if (cell->type == PGTYPE_INDEX_LEAF) {
+        READ_UINT32(keyPk, cell_data, 8);
+        (cell->fields).indexLeaf.keyPk = keyPk;
+    } else {
+        // TODO
     }
-
-    // switch(cell->type)
-    // {
-    // case PGTYPE_TABLE_INTERNAL:
-    //     break;
-    // case PGTYPE_INDEX_INTERNAL:
-    //     break;
-    // case PGTYPE_TABLE_LEAF:
-    //     break;
-    // case PGTYPE_INDEX_LEAF:
-    //     break;
-    // } 
 
     return CHIDB_OK;
 }
