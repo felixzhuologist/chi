@@ -194,19 +194,14 @@ int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
     *btn = malloc(sizeof(BTreeNode));
     // the first page's page header starts at byte 100 because of the file header
     int header_offset = npage == 1 ? 100 : 0;
-    uint8_t type = page->data[header_offset + PGHEADER_PGTYPE_OFFSET];
-    uint16_t free_offset = get2byte(page->data + header_offset + PGHEADER_FREE_OFFSET);
-    uint16_t n_cells = get2byte(page->data + header_offset + PGHEADER_NCELLS_OFFSET);
-    uint16_t cells_offset = get2byte(page->data + header_offset + PGHEADER_CELL_OFFSET);
-    uint32_t right_page = get4byte(page->data + header_offset + PGHEADER_RIGHTPG_OFFSET);
+    (*btn)->type = page->data[header_offset + PGHEADER_PGTYPE_OFFSET];
+    (*btn)->free_offset = get2byte(page->data + header_offset + PGHEADER_FREE_OFFSET);
+    (*btn)->n_cells = get2byte(page->data + header_offset + PGHEADER_NCELLS_OFFSET);
+    (*btn)->cells_offset = get2byte(page->data + header_offset + PGHEADER_CELL_OFFSET);
     (*btn)->page = page;
-    (*btn)->type = type;
-    (*btn)->free_offset = free_offset;
-    (*btn)->n_cells = (ncell_t)n_cells;
-    (*btn)->cells_offset = cells_offset;
 
-    if (type == PGTYPE_TABLE_INTERNAL || type == PGTYPE_INDEX_INTERNAL) {
-        (*btn)->right_page = (npage_t)right_page;
+    if ((*btn)->type == PGTYPE_TABLE_INTERNAL || (*btn)->type == PGTYPE_INDEX_INTERNAL) {
+        (*btn)->right_page = (npage_t)get4byte(page->data + header_offset + PGHEADER_RIGHTPG_OFFSET);
         (*btn)->celloffset_array = page->data + header_offset + INTPG_CELLSOFFSET_OFFSET; 
     } else { // leaf page
         (*btn)->right_page = 0; // leaves have no right pointers
@@ -359,6 +354,7 @@ int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 
     uint16_t cell_offset = get2byte(btn->celloffset_array + ncell*2);
     uint8_t *cell_data = btn->page->data + cell_offset;
+    // chilog(INFO, "%d %d", cell_offset, btn->cells_offset);
     READ_VARINT32(key, cell_data, 4)
 
     cell->type = btn->type;
@@ -412,7 +408,46 @@ int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
  */
 int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 {
-    /* Your code goes here */
+    assert(cell->type == btn->type);
+    if (ncell < 0 || ncell > btn->n_cells + 1) {
+        return CHIDB_ECELLNO;
+    }
+
+    // pointer to start of cells
+    uint8_t *cells_offset = btn->page->data + btn->cells_offset;
+    // write cell
+    if (cell->type == PGTYPE_TABLE_INTERNAL) {
+        put4byte(cells_offset - 4, cell->key);
+        put4byte(cells_offset - 8, (cell->fields).tableInternal.child_page);
+        btn->cells_offset -= 8;
+    } else if (cell->type == PGTYPE_INDEX_INTERNAL) {
+        put4byte(cells_offset - 4, (cell->fields).indexInternal.keyPk);
+        put4byte(cells_offset - 8, cell->key);
+        btn->page->data[btn->cells_offset - 9] = 0x04;
+        btn->page->data[btn->cells_offset - 10] = 0x04;
+        btn->page->data[btn->cells_offset - 11] = 0x03;
+        btn->page->data[btn->cells_offset - 12] = 0x0B;
+        put4byte(cells_offset - 16, (cell->fields).indexInternal.child_page);
+        btn->cells_offset -= 16;
+    } else if (cell->type == PGTYPE_TABLE_LEAF) {
+        uint32_t data_size = (cell->fields).tableLeaf.data_size;
+        memcpy(cells_offset - data_size, (cell->fields).tableLeaf.data, data_size);
+        put4byte(cells_offset - data_size - 4, cell->key);
+        put4byte(cells_offset - data_size - 8, data_size);
+        btn->cells_offset -= data_size - 8;
+    } else if (cell->type == PGTYPE_INDEX_LEAF) {
+        put4byte(cells_offset - 4, (cell->fields).indexInternal.keyPk);
+        put4byte(cells_offset - 8, cell->key);
+        btn->page->data[btn->cells_offset - 9] = 0x04;
+        btn->page->data[btn->cells_offset - 10] = 0x04;
+        btn->page->data[btn->cells_offset - 11] = 0x03;
+        btn->page->data[btn->cells_offset - 12] = 0x0B;
+        btn->cells_offset -= 12;
+    } else {
+        // TODO
+    }
+
+    // write cell offset
 
     return CHIDB_OK;
 }
