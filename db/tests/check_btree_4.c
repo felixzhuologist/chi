@@ -39,7 +39,7 @@ START_TEST (test_4_2)
     chidb_Btree_getCell(btn, 2, &btc);
     ck_assert(btc.type == PGTYPE_TABLE_LEAF);
     ck_assert(btc.key == 127);
-    // ck_assert(btc.fields.tableLeaf.data_size == 128);
+    ck_assert(btc.fields.tableLeaf.data_size == 128);
     ck_assert(!memcmp(btc.fields.tableLeaf.data, "foo127", 6));
 
     chidb_Btree_close(db->bt);

@@ -55,13 +55,7 @@
 #include "pager.h"
 #include "util.h"
 
-#define READ_UINT8(var, buffer, offset) uint8_t var; memcpy(&var, buffer + offset, 1);
-#define READ_UINT16(var, buffer, offset) uint16_t var; memcpy(&var, buffer + offset, 2); var = ntohs(var);
-#define READ_UINT32(var, buffer, offset) uint32_t var; memcpy(&var, buffer + offset, 4); var = ntohl(var);
-
-#define WRITE_UINT8(val, buffer, offset) buffer[offset] = (uint8_t)val;
-#define WRITE_UINT16(val, buffer, offset) {int temp = (uint16_t)htons(val); memcpy(buffer + offset, &temp, 2);}
-#define WRITE_UINT32(val, buffer, offset) {int temp = (uint32_t)htonl(val); memcpy(buffer + offset, &temp, 4);}
+#define READ_VARINT32(var, buffer, offset) uint32_t var; getVarint32(buffer + offset, &var);
 
 // Return a new empty BTreeNode
 BTreeNode chidb_Btree_createNode(BTree *bt, npage_t npage, uint8_t type) {
@@ -119,11 +113,11 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
         fseek(f, 0, SEEK_END);
         long file_size = ftell(f) - 1;
 
-        READ_UINT16(page_size,           buffer, 16)
-        READ_UINT32(file_change_counter, buffer, 24)
-        READ_UINT32(schema_version,      buffer, 40)
-        READ_UINT32(page_cache_size,     buffer, 48)
-        READ_UINT32(user_cookie,         buffer, 60)
+        uint16_t page_size = get2byte(buffer + 16);
+        uint32_t file_change_counter = get4byte(buffer + 24);
+        uint32_t schema_version = get4byte(buffer + 40);
+        uint32_t page_cache_size = get4byte(buffer + 48);
+        uint32_t user_cookie = get4byte(buffer + 60);
 
         if (file_change_counter || schema_version || user_cookie || page_cache_size != 20000) {
             return CHIDB_ECORRUPTHEADER;
@@ -200,11 +194,11 @@ int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
     *btn = malloc(sizeof(BTreeNode));
     // the first page's page header starts at byte 100 because of the file header
     int header_offset = npage == 1 ? 100 : 0;
-    READ_UINT8(type,          page->data, header_offset + PGHEADER_PGTYPE_OFFSET)
-    READ_UINT16(free_offset,  page->data, header_offset + PGHEADER_FREE_OFFSET)
-    READ_UINT16(n_cells,      page->data, header_offset + PGHEADER_NCELLS_OFFSET)
-    READ_UINT16(cells_offset, page->data, header_offset + PGHEADER_CELL_OFFSET)
-    READ_UINT32(right_page,   page->data, header_offset + PGHEADER_RIGHTPG_OFFSET)
+    uint8_t type = page->data[header_offset + PGHEADER_PGTYPE_OFFSET];
+    uint16_t free_offset = get2byte(page->data + header_offset + PGHEADER_FREE_OFFSET);
+    uint16_t n_cells = get2byte(page->data + header_offset + PGHEADER_NCELLS_OFFSET);
+    uint16_t cells_offset = get2byte(page->data + header_offset + PGHEADER_CELL_OFFSET);
+    uint32_t right_page = get4byte(page->data + header_offset + PGHEADER_RIGHTPG_OFFSET);
     (*btn)->page = page;
     (*btn)->type = type;
     (*btn)->free_offset = free_offset;
@@ -261,12 +255,12 @@ int chidb_Btree_freeMemNode(BTree *bt, BTreeNode *btn)
 void chidb_Btree_syncNode(BTreeNode *btn)
 {
     int header_offset = btn->page->npage == 1 ? 100 : 0;
-    WRITE_UINT8(btn->type,          btn->page->data, header_offset + PGHEADER_PGTYPE_OFFSET)
-    WRITE_UINT16(btn->free_offset,  btn->page->data, header_offset + PGHEADER_FREE_OFFSET)
-    WRITE_UINT16(btn->n_cells,      btn->page->data, header_offset + PGHEADER_NCELLS_OFFSET)
-    WRITE_UINT16(btn->cells_offset, btn->page->data, header_offset + PGHEADER_CELL_OFFSET)
+    btn->page->data[header_offset + PGHEADER_PGTYPE_OFFSET] = btn->type;
+    put2byte(btn->page->data + header_offset + PGHEADER_FREE_OFFSET, btn->free_offset);
+    put2byte(btn->page->data + header_offset + PGHEADER_NCELLS_OFFSET, btn->n_cells);
+    put2byte(btn->page->data + header_offset + PGHEADER_CELL_OFFSET, btn->cells_offset);
     if (btn->type == PGTYPE_TABLE_INTERNAL || btn->type == PGTYPE_INDEX_INTERNAL) {
-        WRITE_UINT32(btn->right_page,   btn->page->data, header_offset + PGHEADER_RIGHTPG_OFFSET)
+        put4byte(btn->page->data + header_offset + PGHEADER_RIGHTPG_OFFSET, btn->right_page);
     }
 }
 
@@ -363,32 +357,27 @@ int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
         return CHIDB_ECELLNO;
     }
 
-    READ_UINT16(cell_offset, btn->celloffset_array, ncell * 2);
+    uint16_t cell_offset = get2byte(btn->celloffset_array + ncell*2);
     uint8_t *cell_data = btn->page->data + cell_offset;
-    READ_UINT32(key, cell_data, 4);
+    READ_VARINT32(key, cell_data, 4)
 
     cell->type = btn->type;
-    uint32_t varint_mask = ~((1 << 31) | (1 << 23) | (1 << 15) | (1 << 7));
-    cell->key = (chidb_key_t)(key & varint_mask);
-    // uint32_t bla = cell_data[0] |
-    //                (cell_data[1] & ~(1 << 7)) << 7 |
-    //                (cell_data[2] & ~(1 << 7)) << 14 |
-    //                (cell_data[3] & ~(1 << 7)) << 21;
-    // chilog(INFO, "%x %x %d %d %x", key, htonl(key), cell->key, ntohl(bla), bla);
+    cell->key = (chidb_key_t)key;
+
     if (cell->type == PGTYPE_TABLE_INTERNAL) {
-        READ_UINT32(child_page, cell_data, 0)
+        uint32_t child_page = get4byte(cell_data);
         (cell->fields).tableInternal.child_page = child_page;
     } else if (cell->type == PGTYPE_INDEX_INTERNAL) {
-        READ_UINT32(child_page, cell_data, 0)
-        READ_UINT32(keyPk, cell_data, 12);
+        uint32_t child_page = get4byte(cell_data);
+        uint32_t keyPk = get4byte(cell_data + 12);;
         (cell->fields).indexInternal.child_page = child_page;
         (cell->fields).indexInternal.keyPk = keyPk;
     } else if (cell->type == PGTYPE_TABLE_LEAF) {
-        READ_UINT32(data_size, cell_data, 0)
-        (cell->fields).tableLeaf.data_size = data_size & varint_mask;
+        READ_VARINT32(data_size, cell_data, 0)
+        (cell->fields).tableLeaf.data_size = data_size;
         (cell->fields).tableLeaf.data = cell_data + 8;
     } else if (cell->type == PGTYPE_INDEX_LEAF) {
-        READ_UINT32(keyPk, cell_data, 8);
+        uint32_t keyPk = get4byte(cell_data + 8);;
         (cell->fields).indexLeaf.keyPk = keyPk;
     } else {
         // TODO
