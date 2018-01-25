@@ -348,13 +348,12 @@ int chidb_Btree_writeNode(BTree *bt, BTreeNode *btn)
  */
 int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 {
-    if (ncell <= 0 || ncell > btn->n_cells) {
+    if (ncell < 0 || ncell > btn->n_cells) {
         return CHIDB_ECELLNO;
     }
 
     uint16_t cell_offset = get2byte(btn->celloffset_array + ncell*2);
     uint8_t *cell_data = btn->page->data + cell_offset;
-    // chilog(INFO, "%d %d", cell_offset, btn->cells_offset);
     READ_VARINT32(key, cell_data, 4)
 
     cell->type = btn->type;
@@ -417,7 +416,7 @@ int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
     uint8_t *cells_offset = btn->page->data + btn->cells_offset;
     // write cell
     if (cell->type == PGTYPE_TABLE_INTERNAL) {
-        put4byte(cells_offset - 4, cell->key);
+        putVarint32(cells_offset - 4, cell->key);
         put4byte(cells_offset - 8, (cell->fields).tableInternal.child_page);
         btn->cells_offset -= 8;
     } else if (cell->type == PGTYPE_INDEX_INTERNAL) {
@@ -432,9 +431,9 @@ int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
     } else if (cell->type == PGTYPE_TABLE_LEAF) {
         uint32_t data_size = (cell->fields).tableLeaf.data_size;
         memcpy(cells_offset - data_size, (cell->fields).tableLeaf.data, data_size);
-        put4byte(cells_offset - data_size - 4, cell->key);
-        put4byte(cells_offset - data_size - 8, data_size);
-        btn->cells_offset -= data_size - 8;
+        putVarint32(cells_offset - data_size - 4, cell->key);
+        putVarint32(cells_offset - data_size - 8, data_size);
+        btn->cells_offset -= (data_size + 8);
     } else if (cell->type == PGTYPE_INDEX_LEAF) {
         put4byte(cells_offset - 4, (cell->fields).indexInternal.keyPk);
         put4byte(cells_offset - 8, cell->key);
@@ -448,7 +447,13 @@ int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
     }
 
     // write cell offset
+    uint8_t *new_cell_offset = btn->celloffset_array + (2 * ncell);
+    size_t num_bytes_to_shift = (btn->n_cells - ncell) * 2; // + 1 because ncell is 1 indexed
+    memmove(new_cell_offset + 2, new_cell_offset, num_bytes_to_shift);
+    put2byte(new_cell_offset, btn->cells_offset); // our new cell is at the top
 
+    btn->n_cells++;
+    btn->free_offset += 2;
     return CHIDB_OK;
 }
 

@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <check.h>
+#include <chidb/log.h>
 #include "check_btree.h"
 
 START_TEST (test_4_1)
@@ -145,8 +146,8 @@ TCase* make_btree_4_tc(void)
     TCase *tc = tcase_create ("Step 4: Manipulating B-Tree cells");
     tcase_add_test (tc, test_4_1);
     tcase_add_test (tc, test_4_2);
-    // tcase_add_test (tc, test_4_3);
-    // tcase_add_test (tc, test_4_4);
+    tcase_add_test (tc, test_4_3);
+    tcase_add_test (tc, test_4_4);
 
     return tc;
 }
