@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <check.h>
+#include <chidb/log.h>
 #include "check_btree.h"
 
 START_TEST (test_6_1)
@@ -60,6 +61,7 @@ END_TEST
 
 TCase* make_btree_6_tc(void)
 {
+    chilog_setloglevel(TRACE);
     TCase *tc = tcase_create ("Step 6: Insertion into a leaf without splitting");
     tcase_add_test (tc, test_6_1);
     tcase_add_test (tc, test_6_2);

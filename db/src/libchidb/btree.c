@@ -474,6 +474,7 @@ int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
  * - CHIDB_ENOMEM: Could not allocate memory
  * - CHIDB_EIO: An I/O error has occurred when accessing the file
  */
+// TODO: error handling, and switch to iterative version from textbook (p.489)
 int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, uint16_t *size)
 {
     chilog(TRACE, "searching for key %d at node %d", key, nroot);
@@ -507,7 +508,6 @@ int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, 
     } else { // something went wrong, why are we in an index tree?
         return CHIDB_ENOTFOUND;
     }
-    return CHIDB_OK;
 }
 
 
@@ -534,9 +534,14 @@ int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, 
  */
 int chidb_Btree_insertInTable(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t *data, uint16_t size)
 {
-    /* Your code goes here */
+    BTreeCell btc = {
+        .type = PGTYPE_TABLE_LEAF,
+        .key = key,
+        .fields.tableLeaf.data_size = size,
+        .fields.tableLeaf.data = data
+    };
 
-    return CHIDB_OK;
+    return chidb_Btree_insert(bt, nroot, &btc);
 }
 
 
@@ -561,9 +566,13 @@ int chidb_Btree_insertInTable(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t
  */
 int chidb_Btree_insertInIndex(BTree *bt, npage_t nroot, chidb_key_t keyIdx, chidb_key_t keyPk)
 {
-    /* Your code goes here */
+    BTreeCell btc = {
+        .type = PGTYPE_INDEX_LEAF,
+        .key = keyIdx,
+        .fields.indexLeaf.keyPk = keyPk
+    };
 
-    return CHIDB_OK;
+    return chidb_Btree_insert(bt, nroot, &btc);
 }
 
 
@@ -591,9 +600,7 @@ int chidb_Btree_insertInIndex(BTree *bt, npage_t nroot, chidb_key_t keyIdx, chid
  */
 int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc)
 {
-    /* Your code goes here */
-
-    return CHIDB_OK;
+    return chidb_Btree_insertNonFull(bt, nroot, btc);
 }
 
 /* Insert a BTreeCell into a non-full B-Tree node
@@ -619,11 +626,41 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc)
  * - CHIDB_ENOMEM: Could not allocate memory
  * - CHIDB_EIO: An I/O error has occurred when accessing the file
  */
-int chidb_Btree_insertNonFull(BTree *bt, npage_t npage, BTreeCell *btc)
+int chidb_Btree_insertNonFull(BTree *bt, npage_t npage, BTreeCell *to_insert)
 {
-    /* Your code goes here */
+    chilog(TRACE, "inserting key %d at node %d", to_insert->key, npage);
+    BTreeNode *btn;
+    chidb_Btree_getNodeByPage(bt, npage, &btn);
 
-    return CHIDB_OK;
+    if (btn->type == PGTYPE_TABLE_LEAF || btn->type == PGTYPE_INDEX_LEAF) {
+        for (int i = 0; i < btn->n_cells; i++) {
+           BTreeCell btc;
+           chidb_Btree_getCell(btn, i, &btc);
+           chilog(TRACE, "\tleaf cell %d has value %d", i, btc.key);
+            if (btc.key < to_insert->key) {
+                int result = chidb_Btree_insertCell(btn, i, to_insert);
+                return result == CHIDB_OK ? chidb_Btree_writeNode(bt, btn) : result;
+            } else if (btc.key == to_insert->key) {
+                return CHIDB_EDUPLICATE;
+            }
+        }
+        int result = chidb_Btree_insertCell(btn, btn->n_cells, to_insert);
+        return result == CHIDB_OK? chidb_Btree_writeNode(bt, btn) : result;
+    } else if (btn->type == PGTYPE_TABLE_INTERNAL || btn->type == PGTYPE_INDEX_INTERNAL) {
+        for (int i = 0; i < btn->n_cells; i++) {
+            BTreeCell btc;
+            chidb_Btree_getCell(btn, i, &btc);
+            chilog(TRACE, "\tinternal cell %d has value %d", i, btc.key);
+            if (to_insert->key <= btc.key) {
+                return chidb_Btree_insertNonFull(
+                    bt, btc.fields.tableInternal.child_page, to_insert);
+            }
+        }
+        return chidb_Btree_insertNonFull(bt, btn->right_page, to_insert);
+    } else {
+        // TODO
+        return CHIDB_ENOTFOUND;
+    }
 }
 
 
