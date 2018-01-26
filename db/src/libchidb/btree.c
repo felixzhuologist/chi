@@ -470,14 +470,43 @@ int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
  *
  * Return
  * - CHIDB_OK: Operation successful
- * - CHIDB_ENOTFOUND: No entry with the given key way found
+ * - CHIDB_ENOTFOUND: No entry with the given key was found
  * - CHIDB_ENOMEM: Could not allocate memory
  * - CHIDB_EIO: An I/O error has occurred when accessing the file
  */
 int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, uint16_t *size)
 {
-    /* Your code goes here */
+    chilog(TRACE, "searching for key %d at node %d", key, nroot);
+    BTreeNode *btn;
+    chidb_Btree_getNodeByPage(bt, nroot, &btn);
 
+    // if it's a leaf, search cells with key == key
+    if (btn->type == PGTYPE_TABLE_LEAF) {
+        for (int i = 0; i < btn->n_cells; i++) {
+           BTreeCell btc;
+           chidb_Btree_getCell(btn, i, &btc);
+            if (btc.key == key) {
+                *size = btc.fields.tableLeaf.data_size;
+                *data = btc.fields.tableLeaf.data;
+                return CHIDB_OK;
+            }
+        }
+        return CHIDB_ENOTFOUND;
+    // otherwise, recursively call find on the correct child
+    } else if (btn->type == PGTYPE_TABLE_INTERNAL) {
+        for (int i = 0; i < btn->n_cells; i++) {
+            BTreeCell btc;
+            chidb_Btree_getCell(btn, i, &btc);
+            chilog(TRACE, "\tcell %d has value %d", i, btc.key);
+            if (key <= btc.key) {
+                return chidb_Btree_find(
+                    bt, btc.fields.tableInternal.child_page, key, data, size);
+            }
+        }
+        return chidb_Btree_find(bt, btn->right_page, key, data, size);
+    } else { // something went wrong, why are we in an index tree?
+        return CHIDB_ENOTFOUND;
+    }
     return CHIDB_OK;
 }
 
