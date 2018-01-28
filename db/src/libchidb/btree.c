@@ -589,6 +589,25 @@ typedef struct ll {
     ll_node *tail;
 } ll;
 
+// return true if there is enough room in the node to insert the cell without splitting
+// see chidb file format document for details
+bool is_insertable(BTreeNode *btn, BTreeCell *btc) {
+    size_t num_bytes_available = btn->cells_offset - btn->free_offset;
+    size_t num_bytes_needed = 0;
+    if (btc->type == PGTYPE_TABLE_LEAF) {
+        num_bytes_needed = 8 + (btc->fields).tableLeaf.data_size;
+    } else if (btc->type == PGTYPE_TABLE_INTERNAL) {
+        num_bytes_needed = 8;
+    } else if (btc->type == PGTYPE_INDEX_LEAF) {
+        num_bytes_needed = 16;
+    } else if (btc->type == PGTYPE_TABLE_INTERNAL) {
+        num_bytes_needed = 12;
+    } else {
+        // TODO
+    }
+    return num_bytes_available >= num_bytes_needed;
+}
+
 /* Insert a BTreeCell into a B-Tree
  *
  * The chidb_Btree_insert function handles b tree insertion of a new cell/record
@@ -646,6 +665,9 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         path.tail = &current;
     }
 
+    while (!(is_insertable(btn, to_insert))) {
+        // TODO
+    }
     return chidb_Btree_insertInLeaf(bt, btn, to_insert);
 }
 
