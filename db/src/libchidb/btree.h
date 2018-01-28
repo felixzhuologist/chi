@@ -169,8 +169,6 @@ int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, 
 int chidb_Btree_insertInTable(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t *data, uint16_t size);
 int chidb_Btree_insertInIndex(BTree *bt, npage_t nroot, chidb_key_t keyIdx, chidb_key_t keyPk);
 int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc);
-int chidb_Btree_insertNonFull(BTree *bt, npage_t npage, BTreeCell *btc);
-int chidb_Btree_split(BTree *bt, npage_t npage_parent, npage_t npage_child, ncell_t parent_cell, npage_t *npage_child2);
-
+int chidb_Btree_insertInLeaf(BTree *bt, BTreeNode *btn, BTreeCell *to_insert);
 
 #endif /*BTREE_H_*/

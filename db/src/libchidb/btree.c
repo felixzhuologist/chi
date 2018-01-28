@@ -576,15 +576,32 @@ int chidb_Btree_insertInIndex(BTree *bt, npage_t nroot, chidb_key_t keyIdx, chid
 }
 
 
+// basic linked list data structure for keeping track of our traversal path
+// when doing insertions
+typedef struct ll_node {
+    struct ll_node *prev;
+    BTreeNode *val;
+    struct ll_node *next;
+} ll_node;
+
+typedef struct ll {
+    ll_node *head;
+    ll_node *tail;
+} ll;
+
 /* Insert a BTreeCell into a B-Tree
  *
- * The chidb_Btree_insert and chidb_Btree_insertNonFull functions
- * are responsible for inserting new entries into a B-Tree, although
- * chidb_Btree_insertNonFull is the one that actually does the
- * insertion. chidb_Btree_insert, however, first checks if the root
- * has to be split (a splitting operation that is different from
- * splitting any other node). If so, chidb_Btree_split is called
- * before calling chidb_Btree_insertNonFull.
+ * The chidb_Btree_insert function handles b tree insertion of a new cell/record
+ * in the same spirit as the pseudocode of fig 11.15 of the sailboat textbook:
+ * First we search for the leaf page which should contain our new BTreeCell
+ * using the same logic as chidb_Btree_find, but while keeping track of the
+ * encountered tree nodes along the way in a linked list.
+ * Once we have found the leaf node, we keep splitting and moving back up the
+ * traversed path towards the root until we find a node that is not full where
+ * we can insert without splitting. In the simplest case, this would be the leaf
+ * node where we can simply call insertInLeaf without doing any backtracking up
+ * the tree. If we end up reaching the root, then we split the root and create
+ * a new root node.
  *
  * Parameters
  * - bt: B-Tree file
@@ -598,99 +615,72 @@ int chidb_Btree_insertInIndex(BTree *bt, npage_t nroot, chidb_key_t keyIdx, chid
  * - CHIDB_ENOMEM: Could not allocate memory
  * - CHIDB_EIO: An I/O error has occurred when accessing the file
  */
-int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc)
+int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
 {
-    return chidb_Btree_insertNonFull(bt, nroot, btc);
-}
-
-/* Insert a BTreeCell into a non-full B-Tree node
- *
- * chidb_Btree_insertNonFull inserts a BTreeCell into a node that is
- * assumed not to be full (i.e., does not require splitting). If the
- * node is a leaf node, the cell is directly added in the appropriate
- * position according to its key. If the node is an internal node, the
- * function will determine what child node it must insert it in, and
- * calls itself recursively on that child node. However, before doing so
- * it will check if the child node is full or not. If it is, then it will
- * have to be split first.
- *
- * Parameters
- * - bt: B-Tree file
- * - nroot: Page number of the root node of the B-Tree we want to insert
- *          this cell in.
- * - btc: BTreeCell to insert into B-Tree
- *
- * Return
- * - CHIDB_OK: Operation successful
- * - CHIDB_EDUPLICATE: An entry with that key already exists
- * - CHIDB_ENOMEM: Could not allocate memory
- * - CHIDB_EIO: An I/O error has occurred when accessing the file
- */
-int chidb_Btree_insertNonFull(BTree *bt, npage_t npage, BTreeCell *to_insert)
-{
-    chilog(TRACE, "inserting key %d at node %d", to_insert->key, npage);
+    chilog(TRACE, "inserting key %d at node %d", to_insert->key, nroot);
     BTreeNode *btn;
-    chidb_Btree_getNodeByPage(bt, npage, &btn);
+    chidb_Btree_getNodeByPage(bt, nroot, &btn);
+    ll_node current = { .val=btn };
+    ll path = { .head=&current, .tail=&current };
 
-    if (btn->type == PGTYPE_TABLE_LEAF || btn->type == PGTYPE_INDEX_LEAF) {
-        for (int i = 0; i < btn->n_cells; i++) {
-           BTreeCell btc;
-           chidb_Btree_getCell(btn, i, &btc);
-           chilog(TRACE, "\tleaf cell %d has value %d", i, btc.key);
-            if (btc.key < to_insert->key) {
-                int result = chidb_Btree_insertCell(btn, i, to_insert);
-                return result == CHIDB_OK ? chidb_Btree_writeNode(bt, btn) : result;
-            } else if (btc.key == to_insert->key) {
-                return CHIDB_EDUPLICATE;
-            }
-        }
-        int result = chidb_Btree_insertCell(btn, btn->n_cells, to_insert);
-        return result == CHIDB_OK? chidb_Btree_writeNode(bt, btn) : result;
-    } else if (btn->type == PGTYPE_TABLE_INTERNAL || btn->type == PGTYPE_INDEX_INTERNAL) {
+    // find leaf node to insert into and keep track of path
+    while (!(btn->type == PGTYPE_TABLE_LEAF || btn->type == PGTYPE_INDEX_LEAF)) {
+        BTreeNode *next = NULL;
         for (int i = 0; i < btn->n_cells; i++) {
             BTreeCell btc;
             chidb_Btree_getCell(btn, i, &btc);
             chilog(TRACE, "\tinternal cell %d has value %d", i, btc.key);
             if (to_insert->key <= btc.key) {
-                return chidb_Btree_insertNonFull(
-                    bt, btc.fields.tableInternal.child_page, to_insert);
+                chidb_Btree_getNodeByPage(
+                    bt, btc.fields.tableInternal.child_page, &next);
+                break;
             }
         }
-        return chidb_Btree_insertNonFull(bt, btn->right_page, to_insert);
-    } else {
-        // TODO
-        return CHIDB_ENOTFOUND;
+        if (next == NULL) { 
+            chidb_Btree_getNodeByPage(bt, btn->right_page, &next);
+        }
+        btn = next;
+        current.val = btn;
+        (path.tail)->next = &current;
+        current.prev = path.tail;
+        path.tail = &current;
     }
+
+    return chidb_Btree_insertInLeaf(bt, btn, to_insert);
 }
 
-
-/* Split a B-Tree node
+/* Insert a BTreeCell into a non-full leaf B-Tree node
  *
- * Splits a B-Tree node N. This involves the following:
- * - Find the median cell in N.
- * - Create a new B-Tree node M.
- * - Move the cells before the median cell to M (if the
- *   cell is a table leaf cell, the median cell is moved too)
- * - Add a cell to the parent (which, by definition, will be an
- *   internal page) with the median key and the page number of M.
+ * chidb_Btree_insertInLeaf inserts a BTreeCell into a leaf node that is
+ * assumed not to be full (i.e., does not require splitting),
+ * in the appropriate position according to its key.
  *
  * Parameters
  * - bt: B-Tree file
- * - npage_parent: Page number of the parent node
- * - npage_child: Page number of the node to split
- * - parent_ncell: Position in the parent where the new cell will
- *                 be inserted.
- * - npage_child2: Out parameter. Used to return the page of the new child node.
+ * - btn: Leaf node we want to insert into
+ * - btc: BTreeCell to insert into B-Tree
  *
  * Return
  * - CHIDB_OK: Operation successful
+ * - CHIDB_EDUPLICATE: An entry with that key already exists
  * - CHIDB_ENOMEM: Could not allocate memory
  * - CHIDB_EIO: An I/O error has occurred when accessing the file
  */
-int chidb_Btree_split(BTree *bt, npage_t npage_parent, npage_t npage_child, ncell_t parent_ncell, npage_t *npage_child2)
+int chidb_Btree_insertInLeaf(BTree *bt, BTreeNode *btn, BTreeCell *to_insert)
 {
-    /* Your code goes here */
-
-    return CHIDB_OK;
+    int insertion_index = -1;
+    for (int i = 0; i < btn->n_cells; i++) {
+       BTreeCell btc;
+       chidb_Btree_getCell(btn, i, &btc);
+       chilog(TRACE, "\tleaf cell %d has value %d", i, btc.key);
+        if (btc.key < to_insert->key) {
+            insertion_index = i;
+            break;
+        } else if (btc.key == to_insert->key) {
+            return CHIDB_EDUPLICATE;
+        }
+    }
+    insertion_index = insertion_index == -1 ? btn->n_cells : insertion_index;
+    int result = chidb_Btree_insertCell(btn, insertion_index, to_insert);
+    return result == CHIDB_OK ? chidb_Btree_writeNode(bt, btn) : result;
 }
-
