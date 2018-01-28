@@ -608,6 +608,20 @@ bool is_insertable(BTreeNode *btn, BTreeCell *btc) {
     return num_bytes_available >= num_bytes_needed;
 }
 
+// return index of first cell where key < cell.key, or -1 if key already exists
+int get_insertion_index(chidb_key_t key, BTreeNode *btn) {
+    for (int i = 0; i < btn->n_cells; i++) {
+        BTreeCell btc;
+        chidb_Btree_getCell(btn, i, &btc);
+        if (btc.key == key) {
+            return -1;
+        } else if (btc.key < key) {
+            return i;
+        }
+    }
+    return btn->n_cells;
+}
+
 /* Insert a BTreeCell into a B-Tree
  *
  * The chidb_Btree_insert function handles b tree insertion of a new cell/record
@@ -666,6 +680,9 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
     }
 
     while (!(is_insertable(btn, to_insert))) {
+        // ceil of n_cells/2
+        int median_index = btn->n_cells % 2 ? btn->n_cells/2 + 1 : btn->n_cells / 2;
+        int insertion_index;
         // TODO
     }
     return chidb_Btree_insertInLeaf(bt, btn, to_insert);
@@ -690,19 +707,10 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
  */
 int chidb_Btree_insertInLeaf(BTree *bt, BTreeNode *btn, BTreeCell *to_insert)
 {
-    int insertion_index = -1;
-    for (int i = 0; i < btn->n_cells; i++) {
-       BTreeCell btc;
-       chidb_Btree_getCell(btn, i, &btc);
-       chilog(TRACE, "\tleaf cell %d has value %d", i, btc.key);
-        if (btc.key < to_insert->key) {
-            insertion_index = i;
-            break;
-        } else if (btc.key == to_insert->key) {
-            return CHIDB_EDUPLICATE;
-        }
+    int insertion_index = get_insertion_index(to_insert->key, btn);
+    if (insertion_index == -1) {
+        return CHIDB_EDUPLICATE;
     }
-    insertion_index = insertion_index == -1 ? btn->n_cells : insertion_index;
     int result = chidb_Btree_insertCell(btn, insertion_index, to_insert);
     return result == CHIDB_OK ? chidb_Btree_writeNode(bt, btn) : result;
 }
