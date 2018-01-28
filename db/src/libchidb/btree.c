@@ -259,6 +259,24 @@ void chidb_Btree_syncNode(BTreeNode *btn)
     }
 }
 
+
+/* Write an in-memory B-Tree node to disk
+ *
+ * Parameters
+ * - bt: B-Tree file
+ * - btn: BTreeNode to write to disk
+ *
+ * Return
+ * - CHIDB_OK: Operation successful
+ * - CHIDB_EIO: An I/O error has occurred when accessing the file
+ */
+int chidb_Btree_writeNode(BTree *bt, BTreeNode *btn)
+{
+    chidb_Btree_syncNode(btn);
+    return chidb_Pager_writePage(bt->pager, btn->page);
+}
+
+
 /* Create a new B-Tree node
  *
  * Allocates a new page in the file and initializes it as a B-Tree node.
@@ -280,8 +298,7 @@ int chidb_Btree_newNode(BTree *bt, npage_t *npage, uint8_t type)
     chidb_Pager_allocatePage(bt->pager, npage);
 
     BTreeNode new_node = chidb_Btree_createNode(bt, *npage, type);
-    chidb_Btree_syncNode(&new_node);
-    return chidb_Pager_writePage(bt->pager, new_node.page);
+    return chidb_Btree_writeNode(bt, &new_node);
 }
 
 
@@ -305,26 +322,7 @@ int chidb_Btree_newNode(BTree *bt, npage_t *npage, uint8_t type)
 int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
 {
     BTreeNode node = chidb_Btree_createNode(bt, npage, type);
-    chidb_Btree_syncNode(&node);
-    return chidb_Pager_writePage(bt->pager, node.page);
-}
-
-
-
-/* Write an in-memory B-Tree node to disk
- *
- * Parameters
- * - bt: B-Tree file
- * - btn: BTreeNode to write to disk
- *
- * Return
- * - CHIDB_OK: Operation successful
- * - CHIDB_EIO: An I/O error has occurred when accessing the file
- */
-int chidb_Btree_writeNode(BTree *bt, BTreeNode *btn)
-{
-    chidb_Btree_syncNode(btn);
-    return chidb_Pager_writePage(bt->pager, btn->page);
+    return chidb_Btree_writeNode(bt, &node);
 }
 
 
@@ -682,7 +680,6 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
     while (!(is_insertable(btn, to_insert))) {
         // ceil of n_cells/2
         int median_index = btn->n_cells % 2 ? btn->n_cells/2 + 1 : btn->n_cells / 2;
-        int insertion_index;
         // TODO
     }
     return chidb_Btree_insertInLeaf(bt, btn, to_insert);
