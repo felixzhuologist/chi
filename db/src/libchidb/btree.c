@@ -606,20 +606,6 @@ bool is_insertable(BTreeNode *btn, BTreeCell *btc) {
     return num_bytes_available >= num_bytes_needed;
 }
 
-// return index of first cell where key < cell.key, or -1 if key already exists
-int get_insertion_index(chidb_key_t key, BTreeNode *btn) {
-    for (int i = 0; i < btn->n_cells; i++) {
-        BTreeCell btc;
-        chidb_Btree_getCell(btn, i, &btc);
-        if (key == btc.key) {
-            return -1;
-        } else if (key < btc.key) {
-            return i;
-        }
-    }
-    return btn->n_cells;
-}
-
 /* Insert a BTreeCell into a B-Tree
  *
  * The chidb_Btree_insert function handles b tree insertion of a new cell/record
@@ -630,7 +616,7 @@ int get_insertion_index(chidb_key_t key, BTreeNode *btn) {
  * Once we have found the leaf node, we keep splitting and moving back up the
  * traversed path towards the root until we find a node that is not full where
  * we can insert without splitting. In the simplest case, this would be the leaf
- * node where we can simply call insertInLeaf without doing any backtracking up
+ * node where we can simply call insertNonFull without doing any backtracking up
  * the tree. If we end up reaching the root, then we split the root and create
  * a new root node.
  *
@@ -677,10 +663,11 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         path.tail = &current;
     }
 
+    npage_t prev_right = -1;
     // for a more balanced split, should split by space instead of # of cells
     while (!(is_insertable(btn, to_insert))) {
         // take in to account our not yet inserted cell when getting median
-        int median_index = btn->n_cells/2 + 1;
+        int median_index = btn->n_cells / 2;
 
         // create an array of pointers to cells of the overfull node (i.e.
         // the current cells + the cell we want to inserted), sorted by key
@@ -692,12 +679,16 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
             if (to_insert->key < btc.key && !inserted) {
                 inserted = true;
                 overfull_node[i] = to_insert;
+                overfull_node[i + 1] = &btc;
+                if (prev_right != -1) { // in internal node
+                    (overfull_node[i + 1]->fields).tableInternal.child_page = prev_right;
+                }
             } else {
                 overfull_node[inserted ? i + 1 : i] = &btc;
             }
         }
 
-        // here left/right child refers to the two split halves of the node -
+        // here left/right child refers to the two split nodes of the overfull node -
         // left contains the smaller values and right contains the larger values.
         // we overwrite the overfull node with the left node, and create a new page
         // to store the right node
@@ -705,35 +696,55 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         npage_t right_child_npage;
         chidb_Pager_allocatePage(bt->pager, &right_child_npage);
         BTreeNode right_child = chidb_Btree_createNode(bt, right_child_npage, btn->type);
-        if (btn->type == PGTYPE_TABLE_LEAF) {
-            for (int i = 0; i <= median_index; i++) {
-                chidb_Btree_insertCell(&left_child, i, overfull_node[i]);
-            }
-            for (int i = median_index + 1; i <= btn->n_cells; i++) {
-                chidb_Btree_insertCell(&right_child, i - median_index - 1, overfull_node[i]);
-            }
 
-            to_insert = malloc(sizeof(BTreeCell));
-            to_insert->type = PGTYPE_TABLE_INTERNAL;
-            to_insert->key = overfull_node[median_index]->key;
-        } else if (btn->type == PGTYPE_TABLE_INTERNAL) {
-            // TODO
+
+        for (int i = 0; i < median_index; i++) {
+            chidb_Btree_insertCell(&left_child, i, overfull_node[i]);
         }
+        if (btn->type == PGTYPE_TABLE_LEAF) {
+            chidb_Btree_insertCell(&left_child, median_index, overfull_node[median_index]);
+        }
+        for (int i = median_index + 1; i <= btn->n_cells; i++) {
+            chidb_Btree_insertCell(&right_child, i - median_index - 1, overfull_node[i]);
+        }
+
+        to_insert = malloc(sizeof(BTreeCell));
+        to_insert->type = PGTYPE_TABLE_INTERNAL;
+        to_insert->key = overfull_node[median_index]->key;
+        // we are inserting a node into parent whose child is the left split node
+        // (the right split node is set later, since we need the parent node)
+        (to_insert->fields).tableInternal.child_page = btn->page->npage;
+        if (btn->type == PGTYPE_TABLE_INTERNAL) {
+            right_child.right_page = left_child.right_page;
+            left_child.right_page = (overfull_node[median_index]->fields).tableInternal.child_page;            
+        }
+        prev_right = right_child_npage;
+
         // write the new split nodes, and insert into the parent
         chidb_Btree_writeNode(bt, &left_child);
         chidb_Btree_writeNode(bt, &right_child);
+
+        // we are at the root, so create a new root (which is guaranteed to have room)
+        if (path.tail->val == btn) {
+            npage_t nroot;
+            chidb_Pager_allocatePage(bt->pager, &nroot);
+            BTreeNode new_root = chidb_Btree_createNode(bt, nroot, PGTYPE_TABLE_INTERNAL);
+            return chidb_Btree_insertNonFull(bt, &new_root, to_insert, prev_right);
+        }
         path.tail = (path.tail)->prev;
         chidb_Btree_freeMemNode(bt, btn);
         btn = (path.tail)->val;
     }
-    return chidb_Btree_insertInLeaf(bt, btn, to_insert);
+    return chidb_Btree_insertNonFull(bt, btn, to_insert, prev_right);
 }
 
 /* Insert a BTreeCell into a non-full leaf B-Tree node
  *
- * chidb_Btree_insertInLeaf inserts a BTreeCell into a leaf node that is
+ * chidb_Btree_insertNonFull inserts a BTreeCell into a node that is
  * assumed not to be full (i.e., does not require splitting),
- * in the appropriate position according to its key.
+ * in the appropriate position according to its key. It will also update the
+ * child pointers for internal nodes after insertion using the right child
+ * parameter
  *
  * Parameters
  * - bt: B-Tree file
@@ -746,11 +757,27 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
  * - CHIDB_ENOMEM: Could not allocate memory
  * - CHIDB_EIO: An I/O error has occurred when accessing the file
  */
-int chidb_Btree_insertInLeaf(BTree *bt, BTreeNode *btn, BTreeCell *to_insert)
+int chidb_Btree_insertNonFull(BTree *bt, BTreeNode *btn, BTreeCell *to_insert, npage_t right_child)
 {
-    int insertion_index = get_insertion_index(to_insert->key, btn);
-    if (insertion_index == -1) {
-        return CHIDB_EDUPLICATE;
+    int insertion_index = -1;
+    for (int i = 0; i < btn->n_cells; i++) {
+        BTreeCell btc;
+        chidb_Btree_getCell(btn, i, &btc);
+        if (to_insert->key < btc.key) {
+            insertion_index = i;
+        } else if (to_insert->key == btc.key) {
+            return CHIDB_EDUPLICATE;
+        }
+    }
+    insertion_index = insertion_index == -1 ? btn->n_cells : insertion_index;
+    if (btn->type == PGTYPE_TABLE_INTERNAL) { // update pointers
+        if (insertion_index == btn->n_cells) { // appended as largest cell
+            btn->right_page = right_child;
+        } else {
+            BTreeCell btc;
+            chidb_Btree_getCell(btn, insertion_index, &btc);
+            btc.fields.tableInternal.child_page = right_child;
+        }
     }
     int result = chidb_Btree_insertCell(btn, insertion_index, to_insert);
     return result == CHIDB_OK ? chidb_Btree_writeNode(bt, btn) : result;
