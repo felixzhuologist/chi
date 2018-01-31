@@ -135,7 +135,25 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
         db->bt = *bt;
         // fclose(f);
     } else {
+        Pager *pager = malloc(sizeof(Pager));
+        pager->f = f;
+        pager->page_size = DEFAULT_PAGE_SIZE;
+        pager->n_pages = 1;
 
+        *bt = malloc(sizeof(BTree));
+        (*bt)->pager = pager;
+        (*bt)->db = db;
+        db->bt = *bt;
+
+        // write empty leaf node into mem
+        BTreeNode root = chidb_Btree_createNode(*bt, 1, PGTYPE_TABLE_LEAF);
+
+        // write header into mem
+        strcpy((char *)root.page->data, "SQLite format 3");
+        put2byte(root.page->data + 16, DEFAULT_PAGE_SIZE);
+        put4byte(root.page->data + 48, 20000);
+
+        return chidb_Btree_writeNode(*bt, &root);
     }
     return CHIDB_OK;
 }
