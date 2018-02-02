@@ -60,12 +60,13 @@
 // Return a new empty BTreeNode
 BTreeNode chidb_Btree_createNode(BTree *bt, npage_t npage, uint8_t type) {
     MemPage page = chidb_Pager_initMemPage(npage, bt->pager->page_size);
+    int header_offset = npage == 1 ? 100 : 0;
     bool is_leaf = type == PGTYPE_TABLE_LEAF || type ==  PGTYPE_INDEX_LEAF;
     uint16_t free_offset = is_leaf ? LEAFPG_CELLSOFFSET_OFFSET : INTPG_CELLSOFFSET_OFFSET;
     BTreeNode new_node = {
         .page=&page,
         .type=type,
-        .free_offset=free_offset,
+        .free_offset=free_offset + header_offset,
         .n_cells=0,
         .cells_offset=bt->pager->page_size,
     };
@@ -97,21 +98,23 @@ BTreeNode chidb_Btree_createNode(BTree *bt, npage_t npage, uint8_t type) {
 int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
 {
     FILE *f = fopen(filename, "r+");
-    if (f) {
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f) - 1;
+    rewind(f);
+    if (f && file_size >= 0) {
         // TODO: use functions from pager.c to manage Pager?
         uint8_t buffer[100];
         int num_read;
         if ((num_read = fread(buffer, 1, 100, f)) < 100) {
+            chilog(WARNING, "nonempty database file is smaller than 100 bytes");
             return CHIDB_ECORRUPTHEADER;
         }
 
         char *expected = "SQLite format 3";
         if (strncmp((char *)buffer, expected, strlen(expected))) {
+            chilog(WARNING, "database file is not SQLite format 3");
             return CHIDB_ECORRUPTHEADER;
         }
-
-        fseek(f, 0, SEEK_END);
-        long file_size = ftell(f) - 1;
 
         uint16_t page_size = get2byte(buffer + 16);
         uint32_t file_change_counter = get4byte(buffer + 24);
@@ -153,7 +156,9 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
         put2byte(root.page->data + 16, DEFAULT_PAGE_SIZE);
         put4byte(root.page->data + 48, 20000);
 
-        return chidb_Btree_writeNode(*bt, &root);
+
+        int result = chidb_Btree_writeNode(*bt, &root);
+        return result;
     }
     return CHIDB_OK;
 }
@@ -464,7 +469,7 @@ int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 
     // write cell offset
     uint8_t *new_cell_offset = btn->celloffset_array + (2 * ncell);
-    size_t num_bytes_to_shift = (btn->n_cells - ncell) * 2; // + 1 because ncell is 1 indexed
+    size_t num_bytes_to_shift = (btn->n_cells - ncell) * 2;
     memmove(new_cell_offset + 2, new_cell_offset, num_bytes_to_shift);
     put2byte(new_cell_offset, btn->cells_offset); // our new cell is at the top
 
@@ -609,18 +614,19 @@ typedef struct ll {
 // see chidb file format document for details
 bool is_insertable(BTreeNode *btn, BTreeCell *btc) {
     size_t num_bytes_available = btn->cells_offset - btn->free_offset;
-    size_t num_bytes_needed = 0;
+    size_t num_bytes_needed = 2; // 2 bytes for the cell offset
     if (btc->type == PGTYPE_TABLE_LEAF) {
-        num_bytes_needed = 8 + (btc->fields).tableLeaf.data_size;
+        num_bytes_needed += 8 + (btc->fields).tableLeaf.data_size;
     } else if (btc->type == PGTYPE_TABLE_INTERNAL) {
-        num_bytes_needed = 8;
+        num_bytes_needed += 8;
     } else if (btc->type == PGTYPE_INDEX_LEAF) {
-        num_bytes_needed = 16;
+        num_bytes_needed += 16;
     } else if (btc->type == PGTYPE_TABLE_INTERNAL) {
-        num_bytes_needed = 12;
+        num_bytes_needed += 12;
     } else {
         // TODO
     }
+    chilog(TRACE, "bytes available: %d, needed: %d", num_bytes_available, num_bytes_needed);
     return num_bytes_available >= num_bytes_needed;
 }
 
@@ -653,6 +659,7 @@ bool is_insertable(BTreeNode *btn, BTreeCell *btc) {
 int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
 {
     chilog(TRACE, "inserting key %d at node %d", to_insert->key, nroot);
+    // chidb_Btree_print(bt, nroot, chidb_BTree_stringPrinter, true);
     BTreeNode *btn;
     chidb_Btree_getNodeByPage(bt, nroot, &btn);
     ll_node current = { .val=btn };
@@ -694,6 +701,7 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         for (int i = 0; i < btn->n_cells; i++) {
             BTreeCell btc;
             chidb_Btree_getCell(btn, i, &btc);
+            chilog(TRACE, "\tinternal cell %d has value %d", i, btc.key);
             if (to_insert->key < btc.key && !inserted) {
                 inserted = true;
                 overfull_node[i] = to_insert;
@@ -705,12 +713,14 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
                 overfull_node[inserted ? i + 1 : i] = &btc;
             }
         }
+        // TODO: need to add to_insert in the case where it's larger than any other cell
 
         // here left/right child refers to the two split nodes of the overfull node -
         // left contains the smaller values and right contains the larger values.
         // we overwrite the overfull node with the left node, and create a new page
         // to store the right node
         BTreeNode left_child = chidb_Btree_createNode(bt, btn->page->npage, btn->type);
+        // TODO: for some reason allocating right page is destroying cell values
         npage_t right_child_npage;
         chidb_Pager_allocatePage(bt->pager, &right_child_npage);
         BTreeNode right_child = chidb_Btree_createNode(bt, right_child_npage, btn->type);
@@ -753,7 +763,9 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         chidb_Btree_freeMemNode(bt, btn);
         btn = (path.tail)->val;
     }
-    return chidb_Btree_insertNonFull(bt, btn, to_insert, prev_right);
+    int result = chidb_Btree_insertNonFull(bt, btn, to_insert, prev_right);
+    chidb_Btree_print(bt, nroot, chidb_BTree_stringPrinter, true);
+    return result;
 }
 
 /* Insert a BTreeCell into a non-full leaf B-Tree node
@@ -781,6 +793,7 @@ int chidb_Btree_insertNonFull(BTree *bt, BTreeNode *btn, BTreeCell *to_insert, n
     for (int i = 0; i < btn->n_cells; i++) {
         BTreeCell btc;
         chidb_Btree_getCell(btn, i, &btc);
+        chilog(TRACE, "\tinternal cell %d has value %d", i, btc.key);
         if (to_insert->key < btc.key) {
             insertion_index = i;
         } else if (to_insert->key == btc.key) {
