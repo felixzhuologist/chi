@@ -57,19 +57,32 @@
 
 #define READ_VARINT32(var, buffer, offset) uint32_t var; getVarint32(buffer + offset, &var);
 
+// initialize a btn's right page and celloffset array given its other initial values
+void update_fields(BTreeNode *btn, int header_offset) {
+    if (btn->type == PGTYPE_TABLE_INTERNAL || btn->type == PGTYPE_INDEX_INTERNAL) {
+        btn->right_page = (npage_t)get4byte(btn->page->data + header_offset + PGHEADER_RIGHTPG_OFFSET);
+        btn->celloffset_array = btn->page->data + header_offset + INTPG_CELLSOFFSET_OFFSET;
+    } else { // leaf page
+        btn->right_page = 0; // leaves have no right pointers
+        btn->celloffset_array = btn->page->data + header_offset + LEAFPG_CELLSOFFSET_OFFSET;
+    }
+}
+
 // Return a new empty BTreeNode
 BTreeNode chidb_Btree_createNode(BTree *bt, npage_t npage, uint8_t type) {
-    MemPage page = chidb_Pager_initMemPage(npage, bt->pager->page_size);
+    MemPage *page = malloc(sizeof(MemPage));
+    *page = chidb_Pager_initMemPage(npage, bt->pager->page_size);
     int header_offset = npage == 1 ? 100 : 0;
     bool is_leaf = type == PGTYPE_TABLE_LEAF || type ==  PGTYPE_INDEX_LEAF;
     uint16_t free_offset = is_leaf ? LEAFPG_CELLSOFFSET_OFFSET : INTPG_CELLSOFFSET_OFFSET;
     BTreeNode new_node = {
-        .page=&page,
+        .page=page,
         .type=type,
         .free_offset=free_offset + header_offset,
         .n_cells=0,
         .cells_offset=bt->pager->page_size,
     };
+    update_fields(&new_node, header_offset);
     return new_node;
 }
 
@@ -184,7 +197,6 @@ int chidb_Btree_close(BTree *bt)
     return CHIDB_OK;
 }
 
-
 /* Loads a B-Tree node from disk
  *
  * Reads a B-Tree node from a page in the disk. All the information regarding
@@ -223,13 +235,7 @@ int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
     (*btn)->cells_offset = get2byte(page->data + header_offset + PGHEADER_CELL_OFFSET);
     (*btn)->page = page;
 
-    if ((*btn)->type == PGTYPE_TABLE_INTERNAL || (*btn)->type == PGTYPE_INDEX_INTERNAL) {
-        (*btn)->right_page = (npage_t)get4byte(page->data + header_offset + PGHEADER_RIGHTPG_OFFSET);
-        (*btn)->celloffset_array = page->data + header_offset + INTPG_CELLSOFFSET_OFFSET; 
-    } else { // leaf page
-        (*btn)->right_page = 0; // leaves have no right pointers
-        (*btn)->celloffset_array = page->data + header_offset + LEAFPG_CELLSOFFSET_OFFSET;
-    }
+    update_fields(*btn, header_offset);
 
     return CHIDB_OK;
 }
@@ -696,7 +702,7 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
 
         // create an array of pointers to cells of the overfull node (i.e.
         // the current cells + the cell we want to inserted), sorted by key
-        BTreeCell *overfull_node[btn->n_cells + 1];
+        BTreeCell overfull_node[btn->n_cells + 1];
         bool inserted = false;
         for (int i = 0; i < btn->n_cells; i++) {
             BTreeCell btc;
@@ -704,47 +710,50 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
             chilog(TRACE, "\tinternal cell %d has value %d", i, btc.key);
             if (to_insert->key < btc.key && !inserted) {
                 inserted = true;
-                overfull_node[i] = to_insert;
-                overfull_node[i + 1] = &btc;
+                overfull_node[i] = *to_insert;
+                overfull_node[i + 1] = btc;
                 if (prev_right != -1) { // in internal node
-                    (overfull_node[i + 1]->fields).tableInternal.child_page = prev_right;
+                    (overfull_node[i + 1].fields).tableInternal.child_page = prev_right;
                 }
             } else {
-                overfull_node[inserted ? i + 1 : i] = &btc;
+                overfull_node[inserted ? i + 1 : i] = btc;
             }
         }
-        // TODO: need to add to_insert in the case where it's larger than any other cell
+        if (!inserted) {
+            overfull_node[btn->n_cells] = *to_insert;
+        }
 
         // here left/right child refers to the two split nodes of the overfull node -
         // left contains the smaller values and right contains the larger values.
         // we overwrite the overfull node with the left node, and create a new page
         // to store the right node
         BTreeNode left_child = chidb_Btree_createNode(bt, btn->page->npage, btn->type);
-        // TODO: for some reason allocating right page is destroying cell values
+
         npage_t right_child_npage;
         chidb_Pager_allocatePage(bt->pager, &right_child_npage);
         BTreeNode right_child = chidb_Btree_createNode(bt, right_child_npage, btn->type);
 
-
         for (int i = 0; i < median_index; i++) {
-            chidb_Btree_insertCell(&left_child, i, overfull_node[i]);
+            chidb_Btree_insertCell(&left_child, i, overfull_node + i);
         }
         if (btn->type == PGTYPE_TABLE_LEAF) {
-            chidb_Btree_insertCell(&left_child, median_index, overfull_node[median_index]);
+            chidb_Btree_insertCell(&left_child, median_index, overfull_node + median_index);
         }
         for (int i = median_index + 1; i <= btn->n_cells; i++) {
-            chidb_Btree_insertCell(&right_child, i - median_index - 1, overfull_node[i]);
+            chidb_Btree_insertCell(&right_child, i - median_index - 1, overfull_node + i);
         }
 
+        chidb_Btree_print(bt, left_child.page->npage, chidb_BTree_stringPrinter, true);
+        chidb_Btree_print(bt, right_child.page->npage, chidb_BTree_stringPrinter, true);
         to_insert = malloc(sizeof(BTreeCell));
         to_insert->type = PGTYPE_TABLE_INTERNAL;
-        to_insert->key = overfull_node[median_index]->key;
+        to_insert->key = overfull_node[median_index].key;
         // we are inserting a node into parent whose child is the left split node
         // (the right split node is set later, since we need the parent node)
         (to_insert->fields).tableInternal.child_page = btn->page->npage;
         if (btn->type == PGTYPE_TABLE_INTERNAL) {
             right_child.right_page = left_child.right_page;
-            left_child.right_page = (overfull_node[median_index]->fields).tableInternal.child_page;            
+            left_child.right_page = (overfull_node[median_index].fields).tableInternal.child_page;    
         }
         prev_right = right_child_npage;
 
