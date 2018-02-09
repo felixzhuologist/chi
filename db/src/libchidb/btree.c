@@ -767,8 +767,6 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         // write the new split nodes, and insert into the parent
         chidb_Btree_writeNode(bt, &left_child);
         chidb_Btree_writeNode(bt, &right_child);
-        chilog(TRACE, "left split (page %d):", left_child.page->npage);
-        chilog(TRACE, "right split (page %d):", right_child.page->npage);
 
         if (btn_is_root) { // overwrite btn as the new root and return
             npage_t nroot = btn->page->npage;
@@ -813,6 +811,7 @@ int chidb_Btree_insertNonFull(BTree *bt, BTreeNode *btn, BTreeCell *to_insert, n
         chilog(TRACE, "\tinternal cell %d has value %d", i, btc.key);
         if (to_insert->key < btc.key) {
             insertion_index = i;
+            break;
         } else if (to_insert->key == btc.key) {
             return CHIDB_EDUPLICATE;
         }

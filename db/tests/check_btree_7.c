@@ -76,8 +76,8 @@ TCase* make_btree_7_tc(void)
     chilog_setloglevel(ERROR);
     TCase *tc = tcase_create ("Step 7: Insertion with splitting");
     tcase_add_test (tc, test_7_1);
-    // tcase_add_test (tc, test_7_2);
-    // tcase_add_test (tc, test_7_3);
+    tcase_add_test (tc, test_7_2);
+    tcase_add_test (tc, test_7_3);
 
     return tc;
 }
