@@ -13,7 +13,7 @@ START_TEST (test_7_1)
     rc = chidb_Btree_open(fname, db, &db->bt);
     ck_assert(rc == CHIDB_OK);
 
-    for(int i=0; i<bigfile_nvalues; i++)
+    for(int i=0; i<9; i++)
         insert_bigfile(db, i);
 
     test_bigfile(db);

@@ -505,6 +505,7 @@ int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, uint16_t *size)
 {
     chilog(TRACE, "searching for key %d at node %d", key, nroot);
+    chidb_Btree_print(bt, nroot, chidb_BTree_stringPrinter, true);
     BTreeNode *btn;
     chidb_Btree_getNodeByPage(bt, nroot, &btn);
 
@@ -512,6 +513,7 @@ int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, 
     if (btn->type == PGTYPE_TABLE_LEAF) {
         for (int i = 0; i < btn->n_cells; i++) {
            BTreeCell btc;
+           chilog(TRACE, "\tleaf cell %d has value %d", i, btc.key);
            chidb_Btree_getCell(btn, i, &btc);
             if (btc.key == key) {
                 *size = btc.fields.tableLeaf.data_size;
@@ -525,7 +527,7 @@ int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, 
         for (int i = 0; i < btn->n_cells; i++) {
             BTreeCell btc;
             chidb_Btree_getCell(btn, i, &btc);
-            chilog(TRACE, "\tcell %d has value %d", i, btc.key);
+            chilog(TRACE, "\tinternal cell %d has value %d", i, btc.key);
             if (key <= btc.key) {
                 return chidb_Btree_find(
                     bt, btc.fields.tableInternal.child_page, key, data, size);
@@ -743,8 +745,6 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
             chidb_Btree_insertCell(&right_child, i - median_index - 1, overfull_node + i);
         }
 
-        chidb_Btree_print(bt, left_child.page->npage, chidb_BTree_stringPrinter, true);
-        chidb_Btree_print(bt, right_child.page->npage, chidb_BTree_stringPrinter, true);
         to_insert = malloc(sizeof(BTreeCell));
         to_insert->type = PGTYPE_TABLE_INTERNAL;
         to_insert->key = overfull_node[median_index].key;
@@ -761,12 +761,20 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         chidb_Btree_writeNode(bt, &left_child);
         chidb_Btree_writeNode(bt, &right_child);
 
+        chilog(INFO, "left split (page %d):", left_child.page->npage);
+        chidb_Btree_print(bt, left_child.page->npage, chidb_BTree_stringPrinter, true);
+        chilog(INFO, "right split (page %d):", right_child.page->npage);
+        chidb_Btree_print(bt, right_child.page->npage, chidb_BTree_stringPrinter, true);
+
         // we are at the root, so create a new root (which is guaranteed to have room)
         if (path.tail->val == btn) {
             npage_t nroot;
             chidb_Pager_allocatePage(bt->pager, &nroot);
+            chilog(TRACE, "creating new root in page %d", nroot);
             BTreeNode new_root = chidb_Btree_createNode(bt, nroot, PGTYPE_TABLE_INTERNAL);
-            return chidb_Btree_insertNonFull(bt, &new_root, to_insert, prev_right);
+            int result = chidb_Btree_insertNonFull(bt, &new_root, to_insert, prev_right);
+            chidb_Btree_print(bt, nroot, chidb_BTree_stringPrinter, true);
+            return result;
         }
         path.tail = (path.tail)->prev;
         chidb_Btree_freeMemNode(bt, btn);

@@ -118,7 +118,7 @@ void test_bigfile(chidb *db)
 {
     int rc;
 
-    for(int i=0; i<bigfile_nvalues; i++)
+    for(int i=0; i<9; i++)
     {
         uint8_t* buf;
         uint16_t size;
@@ -128,7 +128,7 @@ void test_bigfile(chidb *db)
         for(int j=0; j<48; j++)
             put4byte(data + (4*j), bigfile_ikeys[i]);
 
-        rc = chidb_Btree_find(db->bt, 1, bigfile_pkeys[i], &buf, &size);
+        rc = chidb_Btree_find(db->bt, 3, bigfile_pkeys[i], &buf, &size);
         ck_assert(rc == CHIDB_OK);
         ck_assert(size == datalen);
         ck_assert(!memcmp(buf, data, datalen));
