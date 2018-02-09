@@ -505,7 +505,6 @@ int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, uint16_t *size)
 {
     chilog(TRACE, "searching for key %d at node %d", key, nroot);
-    chidb_Btree_print(bt, nroot, chidb_BTree_stringPrinter, true);
     BTreeNode *btn;
     chidb_Btree_getNodeByPage(bt, nroot, &btn);
 
@@ -667,7 +666,6 @@ bool is_insertable(BTreeNode *btn, BTreeCell *btc) {
 int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
 {
     chilog(TRACE, "inserting key %d at node %d", to_insert->key, nroot);
-    // chidb_Btree_print(bt, nroot, chidb_BTree_stringPrinter, true);
     BTreeNode *btn;
     chidb_Btree_getNodeByPage(bt, nroot, &btn);
     ll_node current = { .val=btn };
@@ -699,6 +697,7 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
     npage_t prev_right = -1;
     // for a more balanced split, should split by space instead of # of cells
     while (!(is_insertable(btn, to_insert))) {
+        bool btn_is_root = path.tail->val == btn;
         // take in to account our not yet inserted cell when getting median
         int median_index = btn->n_cells / 2;
 
@@ -727,9 +726,17 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
 
         // here left/right child refers to the two split nodes of the overfull node -
         // left contains the smaller values and right contains the larger values.
-        // we overwrite the overfull node with the left node, and create a new page
-        // to store the right node
-        BTreeNode left_child = chidb_Btree_createNode(bt, btn->page->npage, btn->type);
+        // if we're at the root, then create two new pages to hold the left and right
+        // split children so that we can overwrite btn with new root values. If
+        // we're not at the root, then overwrite btn with the left node to save space
+        // and only allocate a new page for the right child
+        npage_t left_child_npage;
+        if (btn_is_root) {
+            chidb_Pager_allocatePage(bt->pager, &left_child_npage);
+        } else {
+            left_child_npage = btn->page->npage;
+        }
+        BTreeNode left_child = chidb_Btree_createNode(bt, left_child_npage, btn->type);
 
         npage_t right_child_npage;
         chidb_Pager_allocatePage(bt->pager, &right_child_npage);
@@ -750,7 +757,7 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         to_insert->key = overfull_node[median_index].key;
         // we are inserting a node into parent whose child is the left split node
         // (the right split node is set later, since we need the parent node)
-        (to_insert->fields).tableInternal.child_page = btn->page->npage;
+        (to_insert->fields).tableInternal.child_page = left_child_npage;
         if (btn->type == PGTYPE_TABLE_INTERNAL) {
             right_child.right_page = left_child.right_page;
             left_child.right_page = (overfull_node[median_index].fields).tableInternal.child_page;    
@@ -760,20 +767,14 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         // write the new split nodes, and insert into the parent
         chidb_Btree_writeNode(bt, &left_child);
         chidb_Btree_writeNode(bt, &right_child);
+        chilog(TRACE, "left split (page %d):", left_child.page->npage);
+        chilog(TRACE, "right split (page %d):", right_child.page->npage);
 
-        chilog(INFO, "left split (page %d):", left_child.page->npage);
-        chidb_Btree_print(bt, left_child.page->npage, chidb_BTree_stringPrinter, true);
-        chilog(INFO, "right split (page %d):", right_child.page->npage);
-        chidb_Btree_print(bt, right_child.page->npage, chidb_BTree_stringPrinter, true);
-
-        // we are at the root, so create a new root (which is guaranteed to have room)
-        if (path.tail->val == btn) {
-            npage_t nroot;
-            chidb_Pager_allocatePage(bt->pager, &nroot);
-            chilog(TRACE, "creating new root in page %d", nroot);
+        if (btn_is_root) { // overwrite btn as the new root and return
+            npage_t nroot = btn->page->npage;
+            chilog(TRACE, "writing new root to page %d", nroot);
             BTreeNode new_root = chidb_Btree_createNode(bt, nroot, PGTYPE_TABLE_INTERNAL);
             int result = chidb_Btree_insertNonFull(bt, &new_root, to_insert, prev_right);
-            chidb_Btree_print(bt, nroot, chidb_BTree_stringPrinter, true);
             return result;
         }
         path.tail = (path.tail)->prev;
@@ -781,7 +782,6 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         btn = (path.tail)->val;
     }
     int result = chidb_Btree_insertNonFull(bt, btn, to_insert, prev_right);
-    chidb_Btree_print(bt, nroot, chidb_BTree_stringPrinter, true);
     return result;
 }
 

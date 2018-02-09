@@ -13,7 +13,7 @@ START_TEST (test_7_1)
     rc = chidb_Btree_open(fname, db, &db->bt);
     ck_assert(rc == CHIDB_OK);
 
-    for(int i=0; i<9; i++)
+    for(int i=0; i<bigfile_nvalues; i++)
         insert_bigfile(db, i);
 
     test_bigfile(db);
@@ -73,7 +73,7 @@ END_TEST
 
 TCase* make_btree_7_tc(void)
 {   
-    chilog_setloglevel(TRACE);
+    chilog_setloglevel(ERROR);
     TCase *tc = tcase_create ("Step 7: Insertion with splitting");
     tcase_add_test (tc, test_7_1);
     // tcase_add_test (tc, test_7_2);
