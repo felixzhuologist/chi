@@ -434,6 +434,8 @@ int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
  */
 int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 {
+    chilog(INFO, "inserting cell with key %d into index %d of page %d",
+           cell->key, ncell, btn->page->npage);
     assert(cell->type == btn->type);
     if (ncell < 0 || ncell > btn->n_cells + 1) {
         return CHIDB_ECELLNO;
@@ -753,14 +755,25 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         }
 
         to_insert = malloc(sizeof(BTreeCell));
-        to_insert->type = PGTYPE_TABLE_INTERNAL;
-        to_insert->key = overfull_node[median_index].key;
-        // we are inserting a node into parent whose child is the left split node
-        // (the right split node is set later, since we need the parent node)
-        (to_insert->fields).tableInternal.child_page = left_child_npage;
-        if (btn->type == PGTYPE_TABLE_INTERNAL) {
-            right_child.right_page = left_child.right_page;
-            left_child.right_page = (overfull_node[median_index].fields).tableInternal.child_page;    
+        if (btn->type == PGTYPE_TABLE_LEAF || btn->type == PGTYPE_TABLE_INTERNAL) {
+            to_insert->type = PGTYPE_TABLE_INTERNAL;
+            to_insert->key = overfull_node[median_index].key;
+            // we are inserting a node into parent whose child is the left split node
+            // (the right split node is set later, since we need the parent node)
+            (to_insert->fields).tableInternal.child_page = left_child_npage;
+            if (btn->type == PGTYPE_TABLE_INTERNAL) {
+                right_child.right_page = left_child.right_page;
+                left_child.right_page = (overfull_node[median_index].fields).tableInternal.child_page;    
+            }
+        } else {
+            to_insert->type = PGTYPE_INDEX_INTERNAL;
+            to_insert->key = overfull_node[median_index].key;
+            (to_insert->fields).indexInternal.keyPk = overfull_node[median_index].fields.indexInternal.keyPk;
+            (to_insert->fields).indexInternal.child_page = left_child_npage;
+            if (btn->type == PGTYPE_INDEX_INTERNAL) {
+                right_child.right_page = left_child.right_page;
+                left_child.right_page = (overfull_node[median_index].fields).indexInternal.child_page;
+            }
         }
         prev_right = right_child_npage;
 
@@ -771,7 +784,10 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         if (btn_is_root) { // overwrite btn as the new root and return
             npage_t nroot = btn->page->npage;
             chilog(TRACE, "writing new root to page %d", nroot);
-            BTreeNode new_root = chidb_Btree_createNode(bt, nroot, PGTYPE_TABLE_INTERNAL);
+            uint8_t root_type = btn->type == PGTYPE_TABLE_LEAF || btn->type == PGTYPE_TABLE_INTERNAL ?
+                                PGTYPE_TABLE_INTERNAL :
+                                PGTYPE_INDEX_INTERNAL;
+            BTreeNode new_root = chidb_Btree_createNode(bt, nroot, root_type);
             int result = chidb_Btree_insertNonFull(bt, &new_root, to_insert, prev_right);
             return result;
         }
@@ -779,6 +795,7 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         chidb_Btree_freeMemNode(bt, btn);
         btn = (path.tail)->val;
     }
+    chilog(INFO, "found page. inserting %d into %d", to_insert->type, btn->type);
     int result = chidb_Btree_insertNonFull(bt, btn, to_insert, prev_right);
     return result;
 }
