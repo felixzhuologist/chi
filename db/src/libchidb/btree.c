@@ -381,29 +381,33 @@ int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 
     uint16_t cell_offset = get2byte(btn->celloffset_array + ncell*2);
     uint8_t *cell_data = btn->page->data + cell_offset;
-    READ_VARINT32(key, cell_data, 4)
+    uint32_t key = 0;
 
     cell->type = btn->type;
-    cell->key = (chidb_key_t)key;
 
     if (cell->type == PGTYPE_TABLE_INTERNAL) {
         uint32_t child_page = get4byte(cell_data);
         (cell->fields).tableInternal.child_page = child_page;
+        getVarint32(cell_data + 4, &key);
     } else if (cell->type == PGTYPE_INDEX_INTERNAL) {
         uint32_t child_page = get4byte(cell_data);
         uint32_t keyPk = get4byte(cell_data + 12);;
         (cell->fields).indexInternal.child_page = child_page;
         (cell->fields).indexInternal.keyPk = keyPk;
+        key = get4byte(cell_data + 8);
     } else if (cell->type == PGTYPE_TABLE_LEAF) {
         READ_VARINT32(data_size, cell_data, 0)
         (cell->fields).tableLeaf.data_size = data_size;
         (cell->fields).tableLeaf.data = cell_data + 8;
+        getVarint32(cell_data + 4, &key);
     } else if (cell->type == PGTYPE_INDEX_LEAF) {
         uint32_t keyPk = get4byte(cell_data + 8);;
         (cell->fields).indexLeaf.keyPk = keyPk;
+        key = get4byte(cell_data + 4);
     } else {
         // TODO
     }
+    cell->key = (chidb_key_t)key;
 
     return CHIDB_OK;
 }
@@ -434,7 +438,7 @@ int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
  */
 int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 {
-    chilog(INFO, "inserting cell with key %d into index %d of page %d",
+    chilog(TRACE, "inserting cell with key %d into index %d of page %d",
            cell->key, ncell, btn->page->npage);
     assert(cell->type == btn->type);
     if (ncell < 0 || ncell > btn->n_cells + 1) {
@@ -680,11 +684,27 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
             BTreeCell btc;
             chidb_Btree_getCell(btn, i, &btc);
             chilog(TRACE, "\tinternal cell %d has value %d", i, btc.key);
-            if (to_insert->key <= btc.key) {
-                chidb_Btree_getNodeByPage(
-                    bt, btc.fields.tableInternal.child_page, &next);
-                break;
+            // if this is the first cell geq the value we are looking for,
+            // get the child depending on whether it's a table or btree node.
+            // for btree nodes, if the key matches then it must exist and we return
+            // EDUPLICATE
+            if (btn->type == PGTYPE_TABLE_INTERNAL) {
+                if (to_insert->key <= btc.key) {
+                    chidb_Btree_getNodeByPage(
+                        bt, btc.fields.tableInternal.child_page, &next);
+                    break;
+                }
+            } else {
+                chilog(TRACE, "\tinternal cell %d has value %d", i, btc.key);
+                if (to_insert->key == btc.key) {
+                    return CHIDB_EDUPLICATE;
+                } else if (to_insert->key < btc.key) {
+                    chidb_Btree_getNodeByPage(
+                        bt, btc.fields.indexInternal.child_page, &next);
+                    break;
+                }
             }
+
         }
         if (next == NULL) { 
             chidb_Btree_getNodeByPage(bt, btn->right_page, &next);
@@ -795,7 +815,6 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *to_insert)
         chidb_Btree_freeMemNode(bt, btn);
         btn = (path.tail)->val;
     }
-    chilog(INFO, "found page. inserting %d into %d", to_insert->type, btn->type);
     int result = chidb_Btree_insertNonFull(bt, btn, to_insert, prev_right);
     return result;
 }
@@ -834,13 +853,17 @@ int chidb_Btree_insertNonFull(BTree *bt, BTreeNode *btn, BTreeCell *to_insert, n
         }
     }
     insertion_index = insertion_index == -1 ? btn->n_cells : insertion_index;
-    if (btn->type == PGTYPE_TABLE_INTERNAL) { // update pointers
+    if (btn->type == PGTYPE_TABLE_INTERNAL || btn->type == PGTYPE_INDEX_INTERNAL) { // update pointers
         if (insertion_index == btn->n_cells) { // appended as largest cell
             btn->right_page = right_child;
         } else {
             BTreeCell btc;
             chidb_Btree_getCell(btn, insertion_index, &btc);
-            btc.fields.tableInternal.child_page = right_child;
+            if (btn->type == PGTYPE_TABLE_INTERNAL) {
+                btc.fields.tableInternal.child_page = right_child;
+            } else {
+                btc.fields.indexInternal.child_page = right_child;
+            }
         }
     }
     int result = chidb_Btree_insertCell(btn, insertion_index, to_insert);

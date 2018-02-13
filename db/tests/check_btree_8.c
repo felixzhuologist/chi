@@ -18,6 +18,7 @@ START_TEST (test_8_1)
         insert_bigfile(db, i);
 
     chidb_Btree_newNode(db->bt, &npage, PGTYPE_INDEX_LEAF);
+    chilog(INFO, "index tree root at %d", npage);
     for(int i=0; i<bigfile_nvalues; i++)
         chidb_Btree_insertInIndex(db->bt, npage, bigfile_ikeys[i], bigfile_pkeys[i]);
 
@@ -88,11 +89,11 @@ END_TEST
 
 TCase* make_btree_8_tc(void)
 {
-    chilog_setloglevel(INFO);
+    chilog_setloglevel(ERROR);
     TCase *tc = tcase_create ("Step 8: Supporting index B-Trees");
     tcase_add_test (tc, test_8_1);
-    // tcase_add_test (tc, test_8_2);
-    // tcase_add_test (tc, test_8_3);
+    tcase_add_test (tc, test_8_2);
+    tcase_add_test (tc, test_8_3);
 
     return tc;
 }
