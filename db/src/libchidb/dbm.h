@@ -43,6 +43,9 @@
 #include "chidbInt.h"
 #include "dbm-types.h"
 
+int realloc_ops(chidb_stmt *stmt, uint32_t size);
+int realloc_reg(chidb_stmt *stmt, uint32_t size);
+int realloc_cur(chidb_stmt *stmt, uint32_t size);
 
 int chidb_stmt_init(chidb_stmt *stmt, chidb *db);
 int chidb_stmt_free(chidb_stmt *stmt);

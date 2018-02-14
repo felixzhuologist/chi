@@ -41,6 +41,7 @@
 #include "dbm.h"
 #include "btree.h"
 #include "record.h"
+#include <chidb/log.h>
 
 
 /* Function pointer for dispatch table */
@@ -191,7 +192,16 @@ int chidb_dbm_op_Key (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Integer (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    assert(op->opcode == Op_Integer);
+    int32_t val = op->p1;
+    int32_t dest = op->p2;
+    chilog(TRACE, "storing %d in register %d", val, dest);
+    if (dest >= stmt->nReg) {
+        // TODO: add CHECK_OK macro
+        int result = realloc_reg(stmt, dest + 1);
+    }
+    stmt->reg[dest].type = REG_INT32;
+    stmt->reg[dest].value.i = val;
 
     return CHIDB_OK;
 }
@@ -199,7 +209,15 @@ int chidb_dbm_op_Integer (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_String (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    assert(op->opcode == Op_String);
+    int32_t dest = op->p2;
+    char *val = op->p4;
+    chilog(TRACE, "storing %s in register %d", val, dest);
+    if (dest >= stmt->nReg) {
+        realloc_reg(stmt, dest + 1);
+    }
+    stmt->reg[dest].type = REG_STRING;
+    stmt->reg[dest].value.s = strdup(val);
 
     return CHIDB_OK;
 }
@@ -207,11 +225,15 @@ int chidb_dbm_op_String (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Null (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    assert(op->opcode == Op_Null);
+    int32_t dest = op->p2;
+    chilog(TRACE, "storing NULL in register %d", dest);
+    if (dest >= stmt->nReg) {
+        realloc_reg(stmt, dest + 1);
+    }
+    stmt->reg[dest].type = REG_NULL;
 
     return CHIDB_OK;
-
-    return 0;
 }
 
 

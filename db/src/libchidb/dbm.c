@@ -41,12 +41,6 @@
 #include <stdbool.h>
 #include "dbm.h"
 
-/* Forward declaration of auxiliary functions. */
-int realloc_ops(chidb_stmt *stmt, uint32_t size);
-int realloc_reg(chidb_stmt *stmt, uint32_t size);
-int realloc_cur(chidb_stmt *stmt, uint32_t size);
-
-
 
 /* Initialize a DBM
  *

@@ -3,6 +3,7 @@
 #include <check.h>
 #include <dirent.h>
 #include <chidb/chidb.h>
+#include <chidb/log.h>
 #include "libchidb/dbm.h"
 #include "libchidb/dbm-file.h"
 #include "libchidb/dbm-types.h"
@@ -92,6 +93,7 @@ END_TEST
 
 int main (void)
 {
+    chilog_setloglevel(TRACE);
     SRunner *sr;
     int number_failed;
 
