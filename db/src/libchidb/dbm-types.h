@@ -260,6 +260,7 @@ struct chidb_stmt
     bool explain;
 
     /* Additional fields go here */
+    char *error;
 };
 
 /* Handy macros for checking whether we're accessing a correct register, cursor, or DBM address */

@@ -37,11 +37,11 @@
  *
  */
 
-
+#include <stdbool.h>
+#include <chidb/log.h>
 #include "dbm.h"
 #include "btree.h"
 #include "record.h"
-#include <chidb/log.h>
 
 
 /* Function pointer for dispatch table */
@@ -67,6 +67,9 @@ FOREACH_OP(HANDLER_PROTOTYPE)
 
 /* Ladies and gentlemen, the dispatch table. */
 #define HANDLER_ENTRY(OP) { Op_ ## OP, chidb_dbm_op_## OP},
+
+// note: evaluates a and b twice...
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 struct handler_entry dbm_handlers[] =
 {
@@ -198,7 +201,7 @@ int chidb_dbm_op_Integer (chidb_stmt *stmt, chidb_dbm_op_t *op)
     chilog(TRACE, "storing %d in register %d", val, dest);
     if (dest >= stmt->nReg) {
         // TODO: add CHECK_OK macro
-        int result = realloc_reg(stmt, dest + 1);
+        realloc_reg(stmt, dest + 1);
     }
     stmt->reg[dest].type = REG_INT32;
     stmt->reg[dest].value.i = val;
@@ -263,48 +266,150 @@ int chidb_dbm_op_Insert (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Eq (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    assert(op->opcode = Op_Eq);
+    if (!IS_VALID_REGISTER(stmt, op->p1) || !IS_VALID_REGISTER(stmt, op->p3)) {
+        chilog(WARNING, "got invalid register");
+        return CHIDB_OK;
+    }
+    chidb_dbm_register_t r1 = stmt->reg[op->p1];
+    chidb_dbm_register_t r2 = stmt->reg[op->p3];
 
+    bool should_jump =
+        (r1.type == REG_INT32 && r2.type == REG_INT32 &&
+            r1.value.i == r2.value.i) ||
+        (r1.type == REG_STRING && r2.type == REG_STRING &&
+            strcmp(r1.value.s, r2.value.s) == 0) ||
+        (r1.type == REG_BINARY && r2.type == REG_BINARY && 
+            r1.value.bin.nbytes == r2.value.bin.nbytes &&
+            memcmp(r1.value.bin.bytes, r2.value.bin.bytes, r1.value.bin.nbytes) == 0);
+    if (should_jump) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Ne (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    assert(op->opcode = Op_Ne);
+    if (!IS_VALID_REGISTER(stmt, op->p1) || !IS_VALID_REGISTER(stmt, op->p3)) {
+        chilog(WARNING, "got invalid register");
+        return CHIDB_OK;
+    }
+    chidb_dbm_register_t r1 = stmt->reg[op->p1];
+    chidb_dbm_register_t r2 = stmt->reg[op->p3];
 
+    bool should_jump =
+        (r1.type == REG_INT32 && r2.type == REG_INT32 &&
+            r1.value.i != r2.value.i) ||
+        (r1.type == REG_STRING && r2.type == REG_STRING &&
+            strcmp(r1.value.s, r2.value.s) != 0) ||
+        (r1.type == REG_BINARY && r2.type == REG_BINARY && 
+            (r1.value.bin.nbytes != r2.value.bin.nbytes ||
+            memcmp(r1.value.bin.bytes, r2.value.bin.bytes, r1.value.bin.nbytes) != 0));
+    if (should_jump) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Lt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    assert(op->opcode = Op_Lt);
+    if (!IS_VALID_REGISTER(stmt, op->p1) || !IS_VALID_REGISTER(stmt, op->p3)) {
+        chilog(WARNING, "got invalid register");
+        return CHIDB_OK;
+    }
+    chidb_dbm_register_t r1 = stmt->reg[op->p1];
+    chidb_dbm_register_t r2 = stmt->reg[op->p3];
 
+    bool should_jump =
+        (r1.type == REG_INT32 && r2.type == REG_INT32 &&
+            r2.value.i < r1.value.i) ||
+        (r1.type == REG_STRING && r2.type == REG_STRING &&
+            strcmp(r2.value.s, r1.value.s) < 0) ||
+        (r1.type == REG_BINARY && r2.type == REG_BINARY && 
+            memcmp(r2.value.bin.bytes, r1.value.bin.bytes, 
+                   MIN(r1.value.bin.nbytes, r2.value.bin.nbytes)) < 0);
+    if (should_jump) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Le (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    assert(op->opcode = Op_Le);
+    if (!IS_VALID_REGISTER(stmt, op->p1) || !IS_VALID_REGISTER(stmt, op->p3)) {
+        chilog(WARNING, "got invalid register");
+        return CHIDB_OK;
+    }
+    chidb_dbm_register_t r1 = stmt->reg[op->p1];
+    chidb_dbm_register_t r2 = stmt->reg[op->p3];
 
+    bool should_jump =
+        (r1.type == REG_INT32 && r2.type == REG_INT32 &&
+            r2.value.i <= r1.value.i) ||
+        (r1.type == REG_STRING && r2.type == REG_STRING &&
+            strcmp(r2.value.s, r1.value.s) <= 0) ||
+        (r1.type == REG_BINARY && r2.type == REG_BINARY && 
+            memcmp(r2.value.bin.bytes, r1.value.bin.bytes, 
+                   MIN(r1.value.bin.nbytes, r2.value.bin.nbytes)) <= 0);
+    if (should_jump) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Gt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    assert(op->opcode = Op_Gt);
+    if (!IS_VALID_REGISTER(stmt, op->p1) || !IS_VALID_REGISTER(stmt, op->p3)) {
+        chilog(WARNING, "got invalid register");
+        return CHIDB_OK;
+    }
+    chidb_dbm_register_t r1 = stmt->reg[op->p1];
+    chidb_dbm_register_t r2 = stmt->reg[op->p3];
 
+    bool should_jump =
+        (r1.type == REG_INT32 && r2.type == REG_INT32 &&
+            r2.value.i > r1.value.i) ||
+        (r1.type == REG_STRING && r2.type == REG_STRING &&
+            strcmp(r2.value.s, r1.value.s) > 0) ||
+        (r1.type == REG_BINARY && r2.type == REG_BINARY && 
+            memcmp(r2.value.bin.bytes, r1.value.bin.bytes, 
+                   MIN(r1.value.bin.nbytes, r2.value.bin.nbytes)) > 0);
+    if (should_jump) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Ge (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    assert(op->opcode = Op_Ge);
+    if (!IS_VALID_REGISTER(stmt, op->p1) || !IS_VALID_REGISTER(stmt, op->p3)) {
+        chilog(WARNING, "got invalid register");
+        return CHIDB_OK;
+    }
+    chidb_dbm_register_t r1 = stmt->reg[op->p1];
+    chidb_dbm_register_t r2 = stmt->reg[op->p3];
 
+    bool should_jump =
+        (r1.type == REG_INT32 && r2.type == REG_INT32 &&
+            r2.value.i >= r1.value.i) ||
+        (r1.type == REG_STRING && r2.type == REG_STRING &&
+            strcmp(r2.value.s, r1.value.s) >= 0) ||
+        (r1.type == REG_BINARY && r2.type == REG_BINARY && 
+            memcmp(r2.value.bin.bytes, r1.value.bin.bytes, 
+                   MIN(r1.value.bin.nbytes, r2.value.bin.nbytes)) >= 0);
+    if (should_jump) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
@@ -429,7 +534,11 @@ int chidb_dbm_op_SCopy (chidb_stmt *stmt, chidb_dbm_op_t *op)
 int chidb_dbm_op_Halt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
     /* Your code goes here */
-
+    stmt->pc = stmt->endOp + 1;
+    if (op->p1) {
+        stmt->error = strdup(op->p4);
+        return op->p1;
+    }
     return CHIDB_OK;
 }
 

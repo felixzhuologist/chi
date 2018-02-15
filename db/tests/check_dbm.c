@@ -93,7 +93,7 @@ END_TEST
 
 int main (void)
 {
-    chilog_setloglevel(TRACE);
+    chilog_setloglevel(INFO);
     SRunner *sr;
     int number_failed;
 
