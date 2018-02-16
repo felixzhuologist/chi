@@ -93,25 +93,27 @@ int chidb_dbm_op_Noop (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_OpenRead (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
-    return CHIDB_OK;
+    stmt->cursors[op->p1].type = CURSOR_READ;
+    return chidb_dbm_init_cursor(
+        stmt->cursors + op->p1,
+        stmt->db->bt,
+        op->p2);
 }
 
 
 int chidb_dbm_op_OpenWrite (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
-    return CHIDB_OK;
+    stmt->cursors[op->p1].type = CURSOR_WRITE;
+    return chidb_dbm_init_cursor(
+        stmt->cursors + op->p1,
+        stmt->db->bt,
+        op->p2);
 }
 
 
 int chidb_dbm_op_Close (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
-    return CHIDB_OK;
+    return chidb_dbm_free_cursor(stmt->cursors + op->p1);
 }
 
 
@@ -125,16 +127,18 @@ int chidb_dbm_op_Rewind (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Next (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    if (chidb_dbm_next(stmt->cursors + op->p1) == CHIDB_OK) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Prev (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    if (chidb_dbm_prev(stmt->cursors + op->p1) == CHIDB_OK) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
@@ -149,8 +153,9 @@ int chidb_dbm_op_Seek (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_SeekGt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    if (chidb_dbm_seek(stmt->cursors + op->p1, op->p3) != CHIDB_OK) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
@@ -314,6 +319,8 @@ int chidb_dbm_op_Ne (chidb_stmt *stmt, chidb_dbm_op_t *op)
 }
 
 
+// TODO: when comparing binary registers: if common bytes are equal, the blob with
+// fewer bytes should be considered less than blob with more bytes
 int chidb_dbm_op_Lt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
     assert(op->opcode = Op_Lt);

@@ -44,6 +44,13 @@
 #include "chidbInt.h"
 #include "btree.h"
 
+// reference to a single cell, parametrized by a btn and an index into that btn
+typedef struct cell_cursor
+{
+  BTreeNode *btn;
+  ncell_t index;
+} cell_cursor;
+
 typedef enum chidb_dbm_cursor_type
 {
     CURSOR_UNSPECIFIED,
@@ -54,12 +61,14 @@ typedef enum chidb_dbm_cursor_type
 typedef struct chidb_dbm_cursor
 {
     chidb_dbm_cursor_type_t type;
-
-    /* Your code goes here */
-
+    ll path;
+    BTree *bt;
 } chidb_dbm_cursor_t;
 
-/* Cursor function definitions go here */
-
+int chidb_dbm_init_cursor(chidb_dbm_cursor_t *cursor, BTree *bt, npage_t leaf);
+int chidb_dbm_free_cursor(chidb_dbm_cursor_t *cursor);
+int chidb_dbm_next(chidb_dbm_cursor_t *cursor);
+int chidb_dbm_prev(chidb_dbm_cursor_t *cursor);
+int chidb_dbm_seek(chidb_dbm_cursor_t *cursor, chidb_key_t key);
 
 #endif /* DBM_CURSOR_H_ */

@@ -40,5 +40,22 @@
 
 #include "dbm-cursor.h"
 
-/* Your code goes here */
+int chidb_dbm_init_cursor(chidb_dbm_cursor_t *cursor, BTree *bt, npage_t leaf) {
+  return CHIDB_OK;
+}
 
+int chidb_dbm_free_cursor(chidb_dbm_cursor_t *cursor) {
+  return CHIDB_OK;
+}
+
+int chidb_dbm_next(chidb_dbm_cursor_t *cursor) {
+  return CHIDB_OK;
+}
+
+int chidb_dbm_prev(chidb_dbm_cursor_t *cursor) {
+  return CHIDB_OK;
+}
+
+int chidb_dbm_seek(chidb_dbm_cursor_t *cursor, chidb_key_t key) {
+  return CHIDB_OK;
+}

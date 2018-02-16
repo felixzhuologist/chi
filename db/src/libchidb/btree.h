@@ -148,6 +148,19 @@ struct BTreeCell
     } fields;
 };
 
+// basic linked list data structure for keeping track of our traversal path
+// when doing insertions
+typedef struct ll_node {
+    struct ll_node *prev;
+    void *val;
+    struct ll_node *next;
+} ll_node;
+
+typedef struct ll {
+    ll_node *head;
+    ll_node *tail;
+} ll;
+
 BTreeNode chidb_Btree_createNode(BTree *bt, npage_t npage, uint8_t type);
 
 int chidb_Btree_open(const char *filename, chidb *db, BTree **bt);

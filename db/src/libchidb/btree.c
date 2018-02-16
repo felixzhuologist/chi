@@ -610,19 +610,6 @@ int chidb_Btree_insertInIndex(BTree *bt, npage_t nroot, chidb_key_t keyIdx, chid
 }
 
 
-// basic linked list data structure for keeping track of our traversal path
-// when doing insertions
-typedef struct ll_node {
-    struct ll_node *prev;
-    BTreeNode *val;
-    struct ll_node *next;
-} ll_node;
-
-typedef struct ll {
-    ll_node *head;
-    ll_node *tail;
-} ll;
-
 // return true if there is enough room in the node to insert the cell without splitting
 // see chidb file format document for details
 bool is_insertable(BTreeNode *btn, BTreeCell *btc) {
