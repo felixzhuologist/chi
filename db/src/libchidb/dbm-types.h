@@ -261,6 +261,7 @@ struct chidb_stmt
 
     /* Additional fields go here */
     char *error;
+    char *dbfile;
 };
 
 /* Handy macros for checking whether we're accessing a correct register, cursor, or DBM address */

@@ -38,6 +38,7 @@
  */
 
 #include <assert.h>
+#include <chidb/log.h>
 #include <stdbool.h>
 #include "dbm.h"
 
@@ -196,13 +197,15 @@ int chidb_stmt_exec(chidb_stmt *stmt)
     while(stmt->pc < stmt->endOp)
     {
         chidb_dbm_op_t *op = &stmt->ops[stmt->pc++];
+        chilog(TRACE, "op: %s, pc: %d", opcode_to_str(op->opcode), stmt->pc);
         rc = chidb_dbm_op_handle(stmt, op);
 
         if (rc != CHIDB_OK)
             break;
     }
 
-    assert(stmt->nRR == stmt->nCols);
+    // TODO
+    // assert(stmt->nRR == stmt->nCols);
 
     if (rc == CHIDB_OK || rc == CHIDB_DONE)
         rc = CHIDB_DONE;

@@ -93,7 +93,7 @@ END_TEST
 
 int main (void)
 {
-    chilog_setloglevel(INFO);
+    chilog_setloglevel(TRACE);
     SRunner *sr;
     int number_failed;
 
@@ -131,7 +131,7 @@ int main (void)
                             TCase *tc = tcase_create (strdup(ent2->d_name));
                             tcase_add_loop_test(tc, test_dbm, i, i+1);
                             suite_add_tcase (s, tc);
-
+                            break;
                             i++;
                         }
                     }

@@ -41,6 +41,7 @@
 #ifndef DBM_CURSOR_H_
 #define DBM_CURSOR_H_
 
+#include <stdbool.h>
 #include "chidbInt.h"
 #include "btree.h"
 
@@ -61,14 +62,19 @@ typedef enum chidb_dbm_cursor_type
 typedef struct chidb_dbm_cursor
 {
     chidb_dbm_cursor_type_t type;
+    // a linked list of cell cursors, going from root to leaf. O(logn) space
+    // but allows for incr/decr in amortized O(1)... an easier implementation
+    // might be to have pointers between consecutive leaf nodes so that the
+    // "bottom layer" of the tree is doubly linked list
     ll path;
     BTree *bt;
 } chidb_dbm_cursor_t;
 
-int chidb_dbm_init_cursor(chidb_dbm_cursor_t *cursor, BTree *bt, npage_t leaf);
+int chidb_dbm_init_cursor(chidb_dbm_cursor_t *cursor, char *dbfile, chidb *db, npage_t root);
 int chidb_dbm_free_cursor(chidb_dbm_cursor_t *cursor);
-int chidb_dbm_next(chidb_dbm_cursor_t *cursor);
-int chidb_dbm_prev(chidb_dbm_cursor_t *cursor);
-int chidb_dbm_seek(chidb_dbm_cursor_t *cursor, chidb_key_t key);
+bool chidb_dbm_rewind(chidb_dbm_cursor_t *cursor);
+bool chidb_dbm_next(chidb_dbm_cursor_t *cursor);
+bool chidb_dbm_prev(chidb_dbm_cursor_t *cursor);
+bool chidb_dbm_seek(chidb_dbm_cursor_t *cursor, chidb_key_t key);
 
 #endif /* DBM_CURSOR_H_ */

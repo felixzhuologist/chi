@@ -37,25 +37,88 @@
  *
  */
 
-
+#include <stdbool.h>
 #include "dbm-cursor.h"
+#include <chidb/log.h>
 
-int chidb_dbm_init_cursor(chidb_dbm_cursor_t *cursor, BTree *bt, npage_t leaf) {
+int chidb_dbm_init_cursor(chidb_dbm_cursor_t *cursor, char *dbfile, chidb *db, npage_t root) {
+  if (root != 1) {
+    chilog(ERROR, "opening bt with root page != 1 not yet implemented");
+    exit(1);
+  }
+  BTree *bt = malloc(sizeof(Btree));
+  chidb_Btree_open(dbfile, db, &bt);
+  cursor->bt = bt;
+  (cursor->path).head = NULL;
+  (cursor->path).tail = NULL;
   return CHIDB_OK;
 }
 
 int chidb_dbm_free_cursor(chidb_dbm_cursor_t *cursor) {
+  // free cursor path
+  ll_node *curr, *next;
+  curr = (cursor->path).head;
+  while (curr != NULL) {
+    next = curr->next;
+    cell_cursor *node = (cell_cursor*)(curr->val);
+    chidb_Btree_freeMemNode(cursor->bt, node->btn);
+    free(curr);
+    curr = next;
+  }
+
+  free(&(cursor->path));
+  chidb_Btree_close(cursor->bt);
+  cursor->type = CURSOR_UNSPECIFIED;
   return CHIDB_OK;
 }
 
-int chidb_dbm_next(chidb_dbm_cursor_t *cursor) {
-  return CHIDB_OK;
+bool chidb_dbm_rewind(chidb_dbm_cursor_t *cursor) {
+  // TODO: keep track of root npage?
+  BTreeNode *btn;
+  chidb_Btree_getNodeByPage(cursor->bt, 1, &btn);
+  cell_cursor *curr_cell_cursor = malloc(sizeof(cell_cursor));
+  curr_cell_cursor->btn = btn;
+  curr_cell_cursor->index = 0;
+
+  ll path = cursor->path;
+  while (btn->type == PGTYPE_TABLE_INTERNAL || btn->type == PGTYPE_INDEX_INTERNAL) {
+    // save current btn into path linked list
+    ll_node *curr = malloc(sizeof(ll_node));
+    curr->prev = path.tail;
+    curr->val = curr_cell_cursor;
+    (path.tail)->next = curr;
+    path.tail = curr;
+    if (path.head == NULL) {
+      path.head = curr;
+    }
+
+    // traverse down leftmost child
+    BTreeCell btc;
+    chidb_Btree_getCell(btn, 0, &btc);
+    chidb_Btree_getNodeByPage(cursor->bt, 1, &btn);
+    curr_cell_cursor = malloc(sizeof(cell_cursor));
+    curr_cell_cursor->btn = btn;
+    curr_cell_cursor->index = 0;
+  }
+  if (btn->n_cells == 0) { // we should only have an empty leaf if this is an empty tree
+    return false;
+  }
+  ll_node *curr = malloc(sizeof(ll_node));
+  curr->prev = path.tail;
+  curr->val = curr_cell_cursor;
+  (path.tail)->next = curr;
+  path.tail = curr;
+  return false;
 }
 
-int chidb_dbm_prev(chidb_dbm_cursor_t *cursor) {
-  return CHIDB_OK;
+bool chidb_dbm_next(chidb_dbm_cursor_t *cursor) {
+  return true;
 }
 
-int chidb_dbm_seek(chidb_dbm_cursor_t *cursor, chidb_key_t key) {
-  return CHIDB_OK;
+bool chidb_dbm_prev(chidb_dbm_cursor_t *cursor) {
+  return true;
+}
+
+bool chidb_dbm_seek(chidb_dbm_cursor_t *cursor, chidb_key_t key) {
+  return true;
 }

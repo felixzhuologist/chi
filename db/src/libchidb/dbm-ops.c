@@ -96,7 +96,8 @@ int chidb_dbm_op_OpenRead (chidb_stmt *stmt, chidb_dbm_op_t *op)
     stmt->cursors[op->p1].type = CURSOR_READ;
     return chidb_dbm_init_cursor(
         stmt->cursors + op->p1,
-        stmt->db->bt,
+        stmt->dbfile,
+        stmt->db,
         op->p2);
 }
 
@@ -106,7 +107,8 @@ int chidb_dbm_op_OpenWrite (chidb_stmt *stmt, chidb_dbm_op_t *op)
     stmt->cursors[op->p1].type = CURSOR_WRITE;
     return chidb_dbm_init_cursor(
         stmt->cursors + op->p1,
-        stmt->db->bt,
+        stmt->dbfile,
+        stmt->db,
         op->p2);
 }
 
@@ -119,15 +121,16 @@ int chidb_dbm_op_Close (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Rewind (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    if (!chidb_dbm_rewind(stmt->cursors + op->p1)) {
+        stmt->pc = op->p2;
+    }
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Next (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    if (chidb_dbm_next(stmt->cursors + op->p1) == CHIDB_OK) {
+    if (!chidb_dbm_next(stmt->cursors + op->p1)) {
         stmt->pc = op->p2;
     }
     return CHIDB_OK;
@@ -136,7 +139,7 @@ int chidb_dbm_op_Next (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Prev (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    if (chidb_dbm_prev(stmt->cursors + op->p1) == CHIDB_OK) {
+    if (!chidb_dbm_prev(stmt->cursors + op->p1)) {
         stmt->pc = op->p2;
     }
     return CHIDB_OK;
@@ -146,16 +149,12 @@ int chidb_dbm_op_Prev (chidb_stmt *stmt, chidb_dbm_op_t *op)
 int chidb_dbm_op_Seek (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
     /* Your code goes here */
-
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_SeekGt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    if (chidb_dbm_seek(stmt->cursors + op->p1, op->p3) != CHIDB_OK) {
-        stmt->pc = op->p2;
-    }
     return CHIDB_OK;
 }
 

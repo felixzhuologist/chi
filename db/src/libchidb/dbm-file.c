@@ -42,6 +42,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <chidb/log.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "dbm.h"
@@ -413,6 +414,7 @@ int __chidb_dbm_file_load(const char* filename, chidb_dbm_file_t **_dbmf, chidb 
                     // "Error parsing line: '%s'", line
                     return rc;
                 }
+                (dbmf->stmt).dbfile = strdup(dbmf->dbfile);
             }
             break;
         case PROGRAM:
