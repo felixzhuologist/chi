@@ -72,9 +72,9 @@ typedef struct chidb_dbm_cursor
 
 int chidb_dbm_init_cursor(chidb_dbm_cursor_t *cursor, char *dbfile, chidb *db, npage_t root);
 int chidb_dbm_free_cursor(chidb_dbm_cursor_t *cursor);
-bool chidb_dbm_rewind(chidb_dbm_cursor_t *cursor);
-bool chidb_dbm_next(chidb_dbm_cursor_t *cursor);
-bool chidb_dbm_prev(chidb_dbm_cursor_t *cursor);
+bool chidb_dbm_rewind(chidb_dbm_cursor_t *cursor); // return false if tree is empty
+bool chidb_dbm_next(chidb_dbm_cursor_t *cursor); // return false if cursor is at the last row
+bool chidb_dbm_prev(chidb_dbm_cursor_t *cursor); // return false if cursor is at the first row
 bool chidb_dbm_seek(chidb_dbm_cursor_t *cursor, chidb_key_t key);
 
 #endif /* DBM_CURSOR_H_ */

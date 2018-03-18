@@ -130,7 +130,7 @@ int chidb_dbm_op_Rewind (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Next (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    if (!chidb_dbm_next(stmt->cursors + op->p1)) {
+    if (chidb_dbm_next(stmt->cursors + op->p1)) {
         stmt->pc = op->p2;
     }
     return CHIDB_OK;

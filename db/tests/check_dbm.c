@@ -93,7 +93,7 @@ END_TEST
 
 int main (void)
 {
-    chilog_setloglevel(TRACE);
+    chilog_setloglevel(INFO);
     SRunner *sr;
     int number_failed;
 
@@ -123,6 +123,9 @@ int main (void)
                     struct dirent *ent2;
                     while ((ent2 = readdir (dir2)) != NULL)
                     {
+                        if (i == 2) {
+                            break;
+                        }
                         if (ent2->d_type == DT_REG)
                         {
                             dbm_tests[i] = malloc(strlen(dirname2) + strlen(ent2->d_name) + 1);
@@ -131,7 +134,6 @@ int main (void)
                             TCase *tc = tcase_create (strdup(ent2->d_name));
                             tcase_add_loop_test(tc, test_dbm, i, i+1);
                             suite_add_tcase (s, tc);
-                            break;
                             i++;
                         }
                     }

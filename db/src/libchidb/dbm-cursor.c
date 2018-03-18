@@ -43,7 +43,7 @@
 
 int chidb_dbm_init_cursor(chidb_dbm_cursor_t *cursor, char *dbfile, chidb *db, npage_t root) {
   if (root != 1) {
-    chilog(ERROR, "opening bt with root page != 1 not yet implemented");
+    chilog(ERROR, "opening bt with root page != 1 not yet implemented. root: %d", root);
     exit(1);
   }
   BTree *bt = malloc(sizeof(Btree));
@@ -95,7 +95,11 @@ bool chidb_dbm_rewind(chidb_dbm_cursor_t *cursor) {
     // traverse down leftmost child
     BTreeCell btc;
     chidb_Btree_getCell(btn, 0, &btc);
-    chidb_Btree_getNodeByPage(cursor->bt, 1, &btn);
+    if (btn->type == PGTYPE_TABLE_INTERNAL) {
+      chidb_Btree_getNodeByPage(cursor->bt, btc.fields.tableInternal.child_page, &btn);
+    } else {
+      chidb_Btree_getNodeByPage(cursor->bt, btc.fields.indexInternal.child_page, &btn);
+    }
     curr_cell_cursor = malloc(sizeof(cell_cursor));
     curr_cell_cursor->btn = btn;
     curr_cell_cursor->index = 0;
@@ -108,10 +112,57 @@ bool chidb_dbm_rewind(chidb_dbm_cursor_t *cursor) {
   curr->val = curr_cell_cursor;
   (path.tail)->next = curr;
   path.tail = curr;
-  return false;
+  return true;
 }
 
 bool chidb_dbm_next(chidb_dbm_cursor_t *cursor) {
+  if ((cursor->path).head == NULL) {
+    chilog(ERROR, "calling next before setting cursor with rewind or seek command");
+    exit(1);
+  }
+
+  // traverse up towards the root until we find a node that we can advance in
+  ll_node *curr_node = (cursor->path).tail;
+  cell_cursor *curr_node_val = (cell_cursor*)curr_node->val;
+  while (!(curr_node_val->index < curr_node_val->btn->n_cells)) {
+    if (curr_node == (cursor->path).head) {
+      // we have reached the root, so we must be at the last row
+      return false;
+    }
+    // traverse up the tree and free the node we just saw
+    curr_node = curr_node->prev;
+    chidb_Btree_freeMemNode(cursor->bt, curr_node_val->btn);
+    curr_node_val = (cell_cursor*)curr_node->val;
+    free(curr_node->next);
+    curr_node->next = NULL;
+  }
+
+  // update path from current node down to a leaf
+  curr_node_val->index++;
+  ll_node *new_node;
+  cell_cursor *new_node_val;
+  while (curr_node_val->btn->type == PGTYPE_TABLE_INTERNAL || curr_node_val->btn->type == PGTYPE_INDEX_INTERNAL) {
+    BTreeNode *btn;
+    BTreeCell btc;
+    chidb_Btree_getCell(curr_node_val->btn, curr_node_val->index, &btc);
+    if (curr_node_val->btn->type == PGTYPE_TABLE_INTERNAL) {
+      chidb_Btree_getNodeByPage(cursor->bt, btc.fields.tableInternal.child_page, &btn);
+    } else {
+      chidb_Btree_getNodeByPage(cursor->bt, btc.fields.indexInternal.child_page, &btn);
+    }
+    new_node_val = malloc(sizeof(cell_cursor));
+    new_node_val->btn = btn;
+    new_node_val->index = 0;
+    new_node = malloc(sizeof(ll_node));
+    new_node->val = new_node_val;
+    new_node->prev = curr_node;
+    new_node->next = NULL;
+    curr_node->next = new_node;
+
+    curr_node = new_node;
+    curr_node_val = new_node_val;
+  }
+  (cursor->path).tail = curr_node;
   return true;
 }
 
